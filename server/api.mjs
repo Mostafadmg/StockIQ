@@ -1,5 +1,6 @@
 /** StockIQ isolated ordering API. Catalogue reads never place supplier orders. */
 import {searchDmd,getDmdPacks,getDmdPack,tariffPackId,dmdCatalogueStatus} from './dmd.mjs';
+import {nextDeliveryEstimate,normaliseFulfilmentScenario,scenarioAcceptedQuantity,createOrderFulfilment,fulfilmentReceiptStatus,restoreOrderFulfilment} from './fulfilment.mjs';
 const sessions = new Map();
 const MAX_SESSIONS = 160;
 const MAX_BODY = 256 * 1024;
@@ -44,13 +45,19 @@ export function seedWorkspace() {
   const a = [line(products,0,6),line(products,3,5),line(products,7,4)];
   const b = [line(products,2,8,8),line(products,5,6,6)];
   const c = [line(products,11,5,2),line(products,14,3,0)];
-  return {version:1,products,features:seedFeatures(products),basket:[],orders:[
+  const workspace={version:1,products,features:seedFeatures(products),basket:[],orders:[
     {id:'TEST-1001',supplier:'Phoenix',items:a,total:total(a),status:'Awaiting',createdAt:dated(0),source:'auto',notes:'Sample test order · no supplier connection'},
     {id:'TEST-1002',supplier:'Alliance',items:b,total:total(b),status:'Received',createdAt:dated(2),receivedAt:dated(1),source:'manual',notes:'Completed sample delivery'},
     {id:'TEST-1003',supplier:'AAH',items:c,total:total(c),status:'Part received',createdAt:dated(1),source:'manual',notes:'Sample partial delivery'}
   ],drafts:[{id:'DRAFT-1001',name:'Weekly essentials',items:[line(products,0,6),line(products,9,3)],createdAt:dated(1)}],
   stockCounts:[],claims:[{id:'CLAIM-1001',orderId:'TEST-1003',reason:'Short delivery — sample claim',quantity:1,status:'Open',createdAt:dated(0)}],feedback:[],
   settings:{autoOrder:true,lowStockAlerts:true,smartOrdering:true,daysCover:7,preferredSupplier:'Phoenix',deliveryCutoff:'14:00',theme:'light',fontSize:'normal',deliveryTimes:{},fastTargets:{},surplusOffers:[]}};
+  for(const order of workspace.orders)attachOrderFulfilment(workspace,order);return workspace;
+}
+function attachOrderFulfilment(workspace,order,scenario='full'){
+  order.fulfilment=createOrderFulfilment({supplier:order.supplier,items:order.items,scenario,createdAt:order.createdAt,orderId:order.id,schedules:workspace.features.deliveryVans});
+  for(const item of order.items){item.requestedQuantity=item.quantity;item.acceptedQuantity=scenarioAcceptedQuantity(item.quantity,scenario);item.outstandingQuantity=item.quantity-item.acceptedQuantity;item.supplier=order.supplier;}
+  order.total=money(order.items.reduce((sum,item)=>sum+item.price*item.acceptedQuantity,0));order.status=fulfilmentReceiptStatus(order.items);return order;
 }
 function fail(message,status=400,code) { const err = new Error(message);err.status=status;err.code=code;throw err; }
 function integer(value,min=1,max=999,label='Quantity') { if (!Number.isInteger(value)||value<min||value>max) fail(`${label} must be a whole number between ${min} and ${max}.`);return value; }
@@ -99,7 +106,7 @@ function restoreFeatures(value,w){
 }
 function cascadePreview(w,priority=suppliers){
   if(!Array.isArray(priority)||!priority.length||priority.length>suppliers.length||new Set(priority).size!==priority.length||priority.some(s=>!suppliers.includes(s)))fail('Supplier priority must contain unique known test suppliers.');
-  const lines=w.basket.map(item=>{const hash=[...item.id].reduce((n,c)=>n+c.charCodeAt(0),0),factors=[1,1.04,.98,1.08,1.02];const quotes=priority.map((supplier,index)=>({supplier,unitPrice:money(item.price*factors[(suppliers.indexOf(supplier)+hash)%factors.length]),available:true,stock:999,simulated:true}));const chosen=[...quotes].sort((a,b)=>a.unitPrice-b.unitPrice||priority.indexOf(a.supplier)-priority.indexOf(b.supplier))[0];return {productId:item.id,name:item.name,quantity:item.quantity,quotes,selectedSupplier:chosen.supplier,unitPrice:chosen.unitPrice,lineTotal:money(chosen.unitPrice*item.quantity)};});
+  const quotedAt=iso();const lines=w.basket.map(item=>{const quotes=priority.map(supplier=>{const fulfilment=createOrderFulfilment({supplier,items:[item],createdAt:quotedAt,schedules:w.features.deliveryVans});return {...fulfilment,unitPrice:item.price,estimatedTotal:money(item.price*item.quantity),available:true,stock:999};});const chosen=quotes.find(quote=>quote.supplier===item.supplier)||quotes[0];return {productId:item.id,name:item.name,quantity:item.quantity,quotes,selectedSupplier:chosen.supplier,unitPrice:chosen.unitPrice,lineTotal:chosen.estimatedTotal};});
   const groups=priority.map(supplier=>{const items=lines.filter(line=>line.selectedSupplier===supplier);return {supplier,items,total:money(items.reduce((sum,line)=>sum+line.lineTotal,0))};}).filter(group=>group.items.length);
   const previewTotal=money(groups.reduce((sum,group)=>sum+group.total,0)),referenceTotal=total(w.basket);return {simulated:true,lines,groups,total:previewTotal,referenceTotal,saving:money(referenceTotal-previewTotal),message:'Sample supplier quotes only. No supplier is contacted and the basket is unchanged.'};
 }
@@ -196,9 +203,10 @@ async function restoreWorkspace(input) {
     return {...copy(original),stock:integer(p.stock,0,9999,'Stock'),owed:integer(p.owed,0,999,'Owed'),target:integer(p.target,0,999,'Target')};
   }));
   if(PRODUCTS.some(p=>!seen.has(p.id)))fail('Snapshot is missing sample products.');
+  w.settings=checkSettings(input.settings,w.settings,w.products);w.features=restoreFeatures(input.features,w);
   function items(input){
     if(!Array.isArray(input)||input.length>w.products.length)fail('Invalid snapshot items.');
-    const ids=new Set();return input.map(i=>{if(!i||ids.has(i.id))fail('Duplicate snapshot item.');ids.add(i.id);const p=product(w,i.id);return {...copy(p),quantity:integer(i.quantity),received:integer(i.received??0,0,i.quantity,'Received')};});
+    const ids=new Set();return input.map(i=>{if(!i||ids.has(i.id))fail('Duplicate snapshot item.');ids.add(i.id);const p=product(w,i.id);return {...copy(p),supplier:suppliers.includes(i.supplier)?i.supplier:p.supplier,quantity:integer(i.quantity),received:integer(i.received??0,0,i.quantity,'Received')};});
   }
   function records(key){if(!Array.isArray(input[key])||input[key].length>MAX_RECORDS)fail(`Invalid snapshot ${key}.`);return input[key];}
   w.basket=items(input.basket);
@@ -206,28 +214,32 @@ async function restoreWorkspace(input) {
   w.orders=records('orders').map(o=>{
     if(!o||!/^TEST-\d{4,9}$/.test(o.id)||orderIds.has(o.id))fail('Invalid snapshot order.');orderIds.add(o.id);
     const lines=items(o.items);if(!lines.length)fail('Snapshot orders need items.');
-    const status=lines.every(i=>i.received===i.quantity)?'Received':lines.some(i=>i.received>0)?'Part received':'Awaiting';
     if(!validDate(o.createdAt))fail('Invalid snapshot order date.');
     if(o.requestId!==undefined){directRequestId(o.requestId);if(requestIds.has(o.requestId))fail('Snapshot orders contain duplicate request IDs.');requestIds.add(o.requestId);}
-    return {id:o.id,items:lines,total:total(lines),status,supplier:suppliers.includes(o.supplier)?o.supplier:'Phoenix',createdAt:o.createdAt,source:o.source==='auto'?'auto':'manual',notes:typeof o.notes==='string'?o.notes.slice(0,500):'',...(o.requestId!==undefined?{requestId:o.requestId}:{}),...(validDate(o.receivedAt)?{receivedAt:o.receivedAt}:{}),...(o.invoice?{invoice:optionalText(o.invoice,80,'Invoice reference')}:{})};
+    const restored={id:o.id,items:lines,total:total(lines),supplier:suppliers.includes(o.supplier)?o.supplier:'Phoenix',createdAt:o.createdAt,source:o.source==='auto'?'auto':'manual',notes:typeof o.notes==='string'?o.notes.slice(0,500):'',...(o.requestId!==undefined?{requestId:o.requestId}:{}),...(validDate(o.receivedAt)?{receivedAt:o.receivedAt}:{}),...(o.invoice?{invoice:optionalText(o.invoice,80,'Invoice reference')}:{})};
+    if(o.fulfilment!==undefined){
+      for(let index=0;index<lines.length;index++){const inputLine=o.items[index],item=lines[index];item.requestedQuantity=integer(inputLine.requestedQuantity,1,999,'Requested packs');item.acceptedQuantity=integer(inputLine.acceptedQuantity,0,item.quantity,'Accepted packs');item.outstandingQuantity=integer(inputLine.outstandingQuantity,0,item.quantity,'Unaccepted packs');item.supplier=restored.supplier;}
+      restored.fulfilment=restoreOrderFulfilment(o.fulfilment,{supplier:restored.supplier,items:lines,createdAt:restored.createdAt,orderId:restored.id});restored.total=money(lines.reduce((sum,item)=>sum+item.price*item.acceptedQuantity,0));restored.status=fulfilmentReceiptStatus(lines);
+    }else attachOrderFulfilment(w,restored);
+    return restored;
   });
   const draftIds=new Set();w.drafts=records('drafts').map(d=>{if(!d||!/^DRAFT-\d{4,9}$/.test(d.id)||draftIds.has(d.id)||!validDate(d.createdAt))fail('Invalid snapshot draft.');draftIds.add(d.id);return {id:d.id,name:string(d.name,80,'Draft name'),items:items(d.items),createdAt:d.createdAt};});
   const claimIds=new Set();w.claims=records('claims').map(c=>{if(!c||!/^CLAIM-\d{4,9}$/.test(c.id)||claimIds.has(c.id)||!orderIds.has(c.orderId)||!validDate(c.createdAt))fail('Invalid snapshot claim.');claimIds.add(c.id);return {id:c.id,orderId:c.orderId,reason:string(c.reason,500,'Claim reason'),quantity:integer(c.quantity),status:['Open','Resolved','draft','submitted','acknowledged','resolved','disputed'].includes(c.status)?c.status:'Open',credit:typeof c.credit==='number'&&Number.isFinite(c.credit)&&c.credit>=0&&c.credit<=1000000?money(c.credit):0,createdAt:c.createdAt};});
   w.feedback=records('feedback').map(f=>({id:string(f.id,40,'Feedback ID'),productId:product(w,f.productId).id,message:string(f.message,500,'Feedback'),createdAt:validDate(f.createdAt)?f.createdAt:iso()}));
   const stockCounts=input.stockCounts??[];if(!Array.isArray(stockCounts)||stockCounts.length>MAX_RECORDS)fail('Invalid snapshot stock counts.');
   w.stockCounts=stockCounts.map(c=>{if(!c||!validDate(c.createdAt))fail('Invalid stock count.');return {productId:product(w,c.productId).id,quantity:integer(c.quantity,0,9999,'Stock'),previous:integer(c.previous,0,9999,'Previous stock'),createdAt:c.createdAt};});
-  w.settings=checkSettings(input.settings,w.settings,w.products);w.features=restoreFeatures(input.features,w);if(input.features?.fastLines){for(const p of w.products)p.fast=w.features.fastLines.ids.includes(p.id);w.settings.fastTargets={...w.settings.fastTargets,...w.features.fastLines.targets};}return w;
+  if(input.features?.fastLines){for(const p of w.products)p.fast=w.features.fastLines.ids.includes(p.id);w.settings.fastTargets={...w.settings.fastTargets,...w.features.fastLines.targets};}return w;
 }
 function reply(data,status=200,w){return Response.json({data,...(w?{workspace:copy(w)}:{}),production:false},{status,headers:{'cache-control':'no-store','x-stockiq-sandbox':'true','x-production':'false'}});}
 async function body(request){
-  const text=await request.text();if(text.length>MAX_BODY)fail('Request is too large.',413);
+  const text=await request.text();const limit=['/api/workspaces','/api/dispatch'].includes(new URL(request.url).pathname)?1024*1024:MAX_BODY;if(text.length>limit)fail('Request is too large.',413);
   if(!text)return {};
   try{const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))fail('Request body must be a JSON object.');return value;}catch(e){if(e.status)throw e;fail('Request body must be valid JSON.');}
 }
 function analytics(w){
   const orders=w.orders; const spend=total(orders.map(o=>({price:o.total,quantity:1})));
   const bySupplier=suppliers.map(name=>({name,total:money(orders.filter(o=>o.supplier===name).reduce((n,o)=>n+o.total,0)),orders:orders.filter(o=>o.supplier===name).length}));
-  return {totalSpend:spend,totalOrders:orders.length,awaiting:orders.filter(o=>o.status!=='Received').length,received:orders.filter(o=>o.status==='Received').length,lowStock:w.products.filter(p=>p.stock<p.target).length,basketTotal:total(w.basket),savings:money(spend*.12),bySupplier,trend:[{day:'Mon',value:24.18},{day:'Tue',value:36.42},{day:'Wed',value:28.7},{day:'Thu',value:49.5},{day:'Fri',value:33.6},{day:'Sat',value:18.2},{day:'Sun',value:spend}],topProducts:w.products.filter(p=>p.fast).slice(0,5)};
+  return {totalSpend:spend,totalOrders:orders.length,awaiting:orders.filter(o=>o.status!=='Received'&&o.status!=='Not accepted').length,received:orders.filter(o=>o.status==='Received').length,lowStock:w.products.filter(p=>p.stock<p.target).length,basketTotal:total(w.basket),savings:money(spend*.12),bySupplier,trend:[{day:'Mon',value:24.18},{day:'Tue',value:36.42},{day:'Wed',value:28.7},{day:'Thu',value:49.5},{day:'Fri',value:33.6},{day:'Sat',value:18.2},{day:'Sun',value:spend}],topProducts:w.products.filter(p=>p.fast).slice(0,5)};
 }
 /** All writes target the caller's isolated, synthetic workspace. */
 export async function handleApi(request,env={}) {
@@ -247,6 +259,7 @@ export async function handleApi(request,env={}) {
       const logicalURL=new URL(envelope.path,url.origin),logicalPath=logicalURL.pathname.replace(/\/$/,'');
       if(logicalURL.origin!==url.origin||!logicalURL.pathname.startsWith('/api/')||['/api/dispatch','/api/workspaces'].includes(logicalPath))fail('This route cannot be called through dispatch.');
       if(envelope.data!==undefined&&(!envelope.data||typeof envelope.data!=='object'||Array.isArray(envelope.data)))fail('Dispatch data must be a JSON object.');
+      if(envelope.data!==undefined&&JSON.stringify(envelope.data).length>MAX_BODY)fail('Request data is too large.',413);
       const w=await restoreWorkspace(envelope.workspace);
       if(!sessions.has(id)&&sessions.size>=MAX_SESSIONS)sessions.delete(sessions.keys().next().value);
       sessions.set(id,w);
@@ -290,7 +303,7 @@ export async function handleApi(request,env={}) {
     if(path==='/api/orders/cascade'&&method==='POST'){
       const data=await body(request);featureObject(data,'Cascade submission',['allocations','notes']);if(!w.basket.length)fail('Add products to your test basket before placing an order.');if(!Array.isArray(data.allocations)||data.allocations.length!==w.basket.length)fail('Allocate every basket line exactly once.');const notes=optionalText(data.notes,500,'Order notes'),seen=new Set(),groups=new Map();
       for(const allocation of data.allocations){featureObject(allocation,'Supplier allocation',['productId','supplier']);const item=w.basket.find(item=>item.id===allocation.productId);if(!item||seen.has(item.id))fail('Allocate every basket line exactly once.');if(!suppliers.includes(allocation.supplier))fail('Choose a known test supplier.');seen.add(item.id);if(!groups.has(allocation.supplier))groups.set(allocation.supplier,[]);groups.get(allocation.supplier).push({...copy(item),received:0});}
-      if(w.orders.length+groups.size>MAX_RECORDS)fail('Order limit reached. Reset this test workspace to continue.',409);let counter=Math.max(1000,...w.orders.map(o=>Number(o.id.split('-').pop())||1000));const created=[...groups].map(([supplier,items])=>({id:`TEST-${++counter}`,supplier,items,total:total(items),status:'Awaiting',createdAt:iso(),source:'manual',notes}));w.orders.unshift(...created);w.basket=[];return reply({orders:created,total:money(created.reduce((sum,o)=>sum+o.total,0)),simulated:true,message:'Test orders use the canonical sample unit costs; comparison quotes are estimates only.'},201,w);
+      if(w.orders.length+groups.size>MAX_RECORDS)fail('Order limit reached. Reset this test workspace to continue.',409);let counter=Math.max(1000,...w.orders.map(o=>Number(o.id.split('-').pop())||1000));const created=[...groups].map(([supplier,items])=>attachOrderFulfilment(w,{id:`TEST-${++counter}`,supplier,items,total:total(items),status:'Awaiting',createdAt:iso(),source:'manual',notes}));w.orders.unshift(...created);w.basket=[];return reply({orders:created,total:money(created.reduce((sum,o)=>sum+o.total,0)),simulated:true,message:'Test orders use the same sample unit costs shown in the review. Delivery times are schedule estimates only.'},201,w);
     }
     const claimStatusMatch=path.match(/^\/api\/claims\/([^/]+)$/);
     if(claimStatusMatch&&method==='PATCH'){const c=w.claims.find(c=>c.id===claimStatusMatch[1]);if(!c)fail('Claim not found.',404);const data=await body(request);featureObject(data,'Claim update',['status','credit']);if(data.status!==undefined&&!['draft','submitted','acknowledged','resolved','disputed'].includes(data.status))fail('Choose a valid claim status.');if(data.credit!==undefined&&(typeof data.credit!=='number'||!Number.isFinite(data.credit)||data.credit<0||data.credit>1000000))fail('Claim credit must be a valid nonnegative amount.');if(data.status!==undefined)c.status=data.status;if(data.credit!==undefined)c.credit=money(data.credit);return reply(c,200,w);}
@@ -335,9 +348,9 @@ export async function handleApi(request,env={}) {
     if(path==='/api/pending'&&method==='GET')return reply(w.products.filter(p=>p.stock<p.target||p.owed>0).map(p=>({...p,suggested:Math.max(1,p.target-p.stock,p.owed)})),200,w);
     if(path==='/api/basket'&&method==='GET')return reply({items:w.basket,total:total(w.basket),count:w.basket.reduce((n,i)=>n+i.quantity,0)},200,w);
     if(path==='/api/basket'&&method==='POST'){
-      const data=await body(request);const p=product(w,data.productId);const quantity=integer(data.quantity);const current=w.basket.find(i=>i.id===p.id);
+      const data=featureObject(await body(request),'Basket line',['productId','quantity','supplier']);const p=product(w,data.productId);const quantity=integer(data.quantity);if(data.supplier!==undefined&&!suppliers.includes(data.supplier))fail('Choose a known test supplier.');const current=w.basket.find(i=>i.id===p.id);
       const next=(current?.quantity||0)+quantity;integer(next);
-      if(current)current.quantity=next;else w.basket.push({...copy(p),quantity,received:0});
+      if(current){current.quantity=next;if(data.supplier!==undefined)current.supplier=data.supplier;}else w.basket.push({...copy(p),supplier:data.supplier??p.supplier,quantity,received:0});
       return reply({items:w.basket,total:total(w.basket),count:w.basket.reduce((n,i)=>n+i.quantity,0)},201,w);
     }
     const basketMatch=path.match(/^\/api\/basket\/([^/]+)$/);
@@ -346,19 +359,23 @@ export async function handleApi(request,env={}) {
       if(method==='DELETE')w.basket=w.basket.filter(x=>x.id!==i.id);else i.quantity=integer((await body(request)).quantity);
       return reply({items:w.basket,total:total(w.basket),count:w.basket.reduce((n,i)=>n+i.quantity,0)},200,w);
     }
+    if(path==='/api/orders/quote'&&method==='POST'){
+      const data=featureObject(await body(request),'Order preview',['productId','quantity','supplier','scenario']);const p=product(w,data.productId),quantity=integer(data.quantity),scenario=normaliseFulfilmentScenario(data.scenario);if(!suppliers.includes(data.supplier))fail('Choose a known test supplier.');
+      const fulfilment=createOrderFulfilment({supplier:data.supplier,items:[{quantity}],scenario,schedules:w.features.deliveryVans});return reply({...fulfilment,productId:p.id,unitPrice:p.price,estimatedTotal:money(p.price*fulfilment.acceptedQuantity)},200,w);
+    }
     if(path==='/api/orders/direct'&&method==='POST'){
-      const data=featureObject(await body(request),'Direct order',['productId','quantity','supplier','notes','requestId']);
-      const p=product(w,data.productId),quantity=integer(data.quantity),requestId=directRequestId(data.requestId),notes=optionalText(data.notes,500,'Notes');
+      const data=featureObject(await body(request),'Direct order',['productId','quantity','supplier','notes','requestId','scenario']);
+      const p=product(w,data.productId),quantity=integer(data.quantity),requestId=directRequestId(data.requestId),notes=optionalText(data.notes,500,'Notes'),scenario=normaliseFulfilmentScenario(data.scenario);
       if(!suppliers.includes(data.supplier))fail('Choose a known test supplier.');
       const existing=w.orders.find(o=>o.requestId===requestId);
       if(existing){
-        if(existing.items.length!==1||existing.items[0].id!==p.id||existing.items[0].quantity!==quantity||existing.supplier!==data.supplier||existing.notes!==notes)fail('This request ID was already used for a different test order.',409,'DIRECT_ORDER_CONFLICT');
-        return reply({order:existing,simulated:true,replayed:true,message:'This test order was already accepted. No duplicate order was created.'},200,w);
+        if(existing.items.length!==1||existing.items[0].id!==p.id||existing.items[0].quantity!==quantity||existing.supplier!==data.supplier||existing.notes!==notes||(existing.fulfilment?.scenario??'full')!==scenario)fail('This request ID was already used for a different test order.',409,'DIRECT_ORDER_CONFLICT');
+        return reply({order:existing,simulated:true,replayed:true,message:'This test attempt was already recorded. No duplicate order was created.'},200,w);
       }
       capacity(w.orders,'Order');
       const items=[{...copy(p),quantity,received:0}],o={id:nextId(w.orders,'TEST'),supplier:data.supplier,items,total:total(items),status:'Awaiting',createdAt:iso(),source:'manual',notes,requestId};
-      w.orders.unshift(o);
-      return reply({order:o,simulated:true,replayed:false,message:'Test order accepted. Awaiting delivery; no supplier submission was made.'},201,w);
+      attachOrderFulfilment(w,o,scenario);w.orders.unshift(o);
+      return reply({order:o,simulated:true,replayed:false,message:o.fulfilment.status==='accepted'?'Test order accepted. Awaiting delivery; no supplier submission was made.':o.fulfilment.status==='partial'?'Test supplier accepted some packs; the remainder was not accepted or backordered.':'No packs accepted. This test attempt is saved for your records; no delivery is scheduled.'},201,w);
     }
     if(path==='/api/orders'&&method==='GET')return reply(w.orders.filter(o=>!url.searchParams.get('status')||o.status===url.searchParams.get('status')),200,w);
     if(path==='/api/orders'&&method==='POST'){
@@ -366,24 +383,24 @@ export async function handleApi(request,env={}) {
       if(data.supplier&&!suppliers.includes(data.supplier))fail('Choose a known test supplier.');
       if(data.notes!=null&&(typeof data.notes!=='string'||data.notes.length>500))fail('Notes must be at most 500 characters.');
       const o={id:nextId(w.orders,'TEST'),supplier:data.supplier||w.settings.preferredSupplier,items:copy(w.basket).map(i=>({...i,received:0})),total:total(w.basket),status:'Awaiting',createdAt:iso(),source:data.source==='auto'?'auto':'manual',notes:data.notes?.trim()||''};
-      w.orders.unshift(o);w.basket=[];return reply(o,201,w);
+      attachOrderFulfilment(w,o);w.orders.unshift(o);w.basket=[];return reply(o,201,w);
     }
     const receiveMatch=path.match(/^\/api\/orders\/([^/]+)\/receive$/);
     if(receiveMatch&&method==='POST'){
-      const o=order(w,receiveMatch[1]);if(o.status==='Received')fail('This test order has already been received.',409);
-      const data=await body(request);const invoice=optionalText(data.invoice??data.reference,80,'Invoice reference');if(w.features.goodsSettings.requireInvoice&&!invoice&&!o.invoice)fail('Enter an invoice or delivery-note reference before receiving this test delivery.');const lines=data.items===undefined?o.items.filter(i=>i.received<i.quantity).map(i=>({productId:i.id,quantity:i.quantity-i.received})):data.items;
+      const o=order(w,receiveMatch[1]);if(o.status==='Not accepted')fail('No packs were accepted for this test order, so it cannot be received.',409);if(o.status==='Received')fail('This test order has already been received.',409);
+      const data=await body(request);const invoice=optionalText(data.invoice??data.reference,80,'Invoice reference');if(w.features.goodsSettings.requireInvoice&&!invoice&&!o.invoice)fail('Enter an invoice or delivery-note reference before receiving this test delivery.');const lines=data.items===undefined?o.items.filter(i=>i.received<(i.acceptedQuantity??i.quantity)).map(i=>({productId:i.id,quantity:(i.acceptedQuantity??i.quantity)-i.received})):data.items;
       if(!Array.isArray(lines)||!lines.length||lines.length>o.items.length)fail('Provide at least one receipt item.');
       const seen=new Set();const validated=lines.map(l=>{
         if(!l||seen.has(l.productId))fail('Receipt items must be unique.');seen.add(l.productId);
         const item=o.items.find(i=>i.id===l.productId);if(!item)fail('Receipt product is not on this order.');
-        integer(l.quantity,1,item.quantity-item.received,'Received quantity');const p=product(w,item.id);integer(p.stock+l.quantity,0,9999,'Stock');return {item,p,quantity:l.quantity};
+        integer(l.quantity,1,(item.acceptedQuantity??item.quantity)-item.received,'Received quantity');const p=product(w,item.id);integer(p.stock+l.quantity,0,9999,'Stock');return {item,p,quantity:l.quantity};
       });
       for(const {item,p,quantity} of validated){item.received+=quantity;p.stock+=quantity;p.owed=Math.max(0,p.owed-quantity);}
-      o.status=o.items.every(i=>i.received===i.quantity)?'Received':'Part received';o.receivedAt=iso();if(invoice)o.invoice=invoice;return reply(o,200,w);
+      o.status=fulfilmentReceiptStatus(o.items);o.receivedAt=iso();if(invoice)o.invoice=invoice;return reply(o,200,w);
     }
     const claimMatch=path.match(/^\/api\/orders\/([^/]+)\/claim$/);
     if(claimMatch&&method==='POST'){
-      const o=order(w,claimMatch[1]);const data=await body(request);capacity(w.claims,'Claim');const reason=string(data.reason,500,'Claim reason');const quantity=integer(data.quantity??1,1,o.items.reduce((n,i)=>n+i.quantity,0),'Claim quantity');
+      const o=order(w,claimMatch[1]);if(o.status==='Not accepted')fail('No packs were accepted for this test order, so there is no delivery to claim against.',409);const data=await body(request);capacity(w.claims,'Claim');const reason=string(data.reason,500,'Claim reason');const quantity=integer(data.quantity??1,1,o.items.reduce((n,i)=>n+(i.acceptedQuantity??i.quantity),0),'Claim quantity');
       const c={id:nextId(w.claims,'CLAIM'),orderId:o.id,reason,quantity,status:'Open',createdAt:iso()};w.claims.unshift(c);return reply(c,201,w);
     }
     if(path==='/api/drafts'&&method==='GET')return reply(w.drafts,200,w);
@@ -393,7 +410,7 @@ export async function handleApi(request,env={}) {
     const draftMatch=path.match(/^\/api\/drafts\/([^/]+)(\/restore)?$/);
     if(draftMatch&&['POST','DELETE'].includes(method)){
       const d=w.drafts.find(d=>d.id===draftMatch[1]);if(!d)fail('Draft not found.',404);
-      if(method==='POST'&&draftMatch[2])w.basket=copy(d.items).map(i=>({...copy(product(w,i.id)),quantity:i.quantity,received:0}));
+      if(method==='POST'&&draftMatch[2])w.basket=copy(d.items).map(i=>({...copy(product(w,i.id)),supplier:i.supplier,quantity:i.quantity,received:0}));
       else if(method==='DELETE'&&!draftMatch[2])w.drafts=w.drafts.filter(x=>x.id!==d.id);else fail('Endpoint not found.',404);
       return reply(method==='DELETE'?{deleted:true}:d,200,w);
     }
@@ -412,11 +429,11 @@ export async function handleApi(request,env={}) {
     if(path==='/api/settings'&&method==='GET')return reply(w.settings,200,w);
     if(path==='/api/settings'&&method==='PATCH'){const next=checkSettings(await body(request),w.settings,w.products);w.settings=next;return reply(next,200,w);}
     if(path==='/api/notifications'&&method==='GET')return reply([
-      {id:'n1',type:'delivery',title:'Deliveries ready to receive',message:`${w.orders.filter(o=>o.status!=='Received').length} test orders are awaiting stock receipt.`,route:'goods-in'},
+      {id:'n1',type:'delivery',title:'Deliveries ready to receive',message:`${w.orders.filter(o=>o.status!=='Received'&&o.status!=='Not accepted').length} test orders are awaiting stock receipt.`,route:'goods-in'},
       {id:'n2',type:'stock',title:'Low stock review',message:`${w.products.filter(p=>p.stock<p.target).length} sample products are below target stock.`,route:'needs-attention'},
       {id:'n3',type:'sandbox',title:'Test workspace active',message:'Sample data only. Supplier connections are disabled.',route:'api'}
     ],200,w);
-    if(path==='/api/ordering/counts'&&method==='GET')return reply({pending:w.products.filter(p=>p.stock<p.target).length,basket:w.basket.length,awaiting:w.orders.filter(o=>o.status!=='Received').length},200,w);
+    if(path==='/api/ordering/counts'&&method==='GET')return reply({pending:w.products.filter(p=>p.stock<p.target).length,basket:w.basket.length,awaiting:w.orders.filter(o=>o.status!=='Received'&&o.status!=='Not accepted').length},200,w);
     if(path==='/api/auth/me'&&method==='GET')return reply({name:'Demo Pharmacist',branch:'St Mellons Pharmacy',role:'Test workspace user'},200,w);
     fail('Endpoint not found.',404);
   }catch(error){return Response.json({error:error.status?error.message:'Test API encountered an unexpected error.',...(error.code?{code:error.code}:{}),production:false},{status:error.status||500,headers:{'cache-control':'no-store','x-stockiq-sandbox':'true','x-production':'false'}});}

@@ -30,7 +30,7 @@ The NHS TRUD release dated 2026-11-09 supplies 145,806 active AMPP/VMPP packs, a
 
 ## Reconstruction limits
 
-Supplier quotes, availability, stock, Core deliveries, branch transfers, claims credits, support messages and forecasting are isolated simulations. They do not contact suppliers, other branches, the original support service or the original ordering backend. OCR extraction and trained AI are not connected. Support notes stay in the workspace. The demo login does not authenticate against the original site; hosted access remains protected by the private Site gate.
+Supplier quotes, availability, stock, Core deliveries, branch transfers, claims credits, support messages and forecasting are isolated simulations. They do not contact suppliers, other branches, the original support service or the original ordering backend. OCR extraction and trained AI are not connected. Support notes stay in the workspace. The demo login does not authenticate against the original site; the owner explicitly made the test Site public; workspaces remain local to each browser.
 
 Historical branch data, original forecasting parameters, supplier contracts, production PMR integration and hidden feature-flag rules were not copied. An interface match is not a claim of identical original server behavior. Desktop/mobile reference screenshots and computed styles were inspected; managed visual browser QA of the clone is unavailable in this session.
 
@@ -38,3 +38,9 @@ Historical branch data, original forecasting parameters, supplier contracts, pro
 ## Mobile UI refinement
 
 The current interface intentionally improves on the reference screenshot: the oversized manual-search empty illustration is removed, search and ordering actions have priority, source details are disclosed on demand, and workspace-product cards open the same selection modal. Page headings, mobile touch targets, contrast, table overflow and safe-area bottom actions are consistent across the app. Original workflow navigation is retained.
+
+## Acceptance and delivery flow
+
+The current original deployed client was inspected read-only for its order and schedule contracts. It distinguishes submitted, accepted, partial, rejected and backordered lines; requested, confirmed and received quantities are separate. Supplying wholesaler/depot and scheduled London-time arrivals are visible. The sandbox adopts these distinctions for full, partial and unavailable simulations and never equates an HTTP success with all requested packs being accepted. No original supplier/stock endpoint was invoked. The original authenticated live supplier responses and hidden backend rules were not verified in this update.
+
+Manual Orders now previews supplier availability/cost/arrival and shows accepted and unavailable packs in its result. Basket review shows delivery estimates for each allocation, followed by per-supplier response cards. History, order details and Goods In keep accepted packs still to receive separate from packs not accepted. Goods In groups deliveries by arrival date, with separate late/unknown queues. Standard England/Wales bank holidays, London DST and supplier cutoffs are included in estimates. These remain schedule estimates and cannot represent supplier delivery promises.

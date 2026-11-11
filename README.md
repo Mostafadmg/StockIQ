@@ -98,3 +98,5 @@ npm start
 ```
 
 Production supplier ordering, transactional stock, PMR, role-based access, automated OCR and trained forecasting remain future integrations. The demo does not imply those connections exist.
+
+Order results show the supplying test wholesaler, supplier reference, requested/accepted/unavailable packs and a London-time estimated arrival. Try full, partial and unavailable responses from the manual modal’s **Test response** disclosure. Delivery Times controls the shared schedule estimates; offsets count working days, excluding weekends and England/Wales bank holidays. Goods In checks in only accepted packs. All supplier prices, availability and order responses remain simulations.

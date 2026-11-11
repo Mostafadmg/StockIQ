@@ -33,15 +33,16 @@ export function prepareManualProductSelection(record,{quantity=1}={}) {
 export function createManualOrderAttempt(makeId=()=>crypto.randomUUID()) {
   let signature=null,requestId=null,completed=false;
   return {
-    prepare(pack,{quantity,supplier,notes=''}) {
+    prepare(pack,{quantity,supplier,notes='',scenario='full'}) {
       if(completed)throw new Error('This item has already been submitted. Choose another item to create a new order.');
       const count=Number(quantity);
       if(typeof quantity!=='number'&&typeof quantity!=='string')throw new Error('Enter a whole number of packs between 1 and 999.');
       if(!pack||!PACK_TYPES.has(pack.type)||!pack.id)throw new Error('Choose a valid medicine pack.');
       if(!Number.isInteger(count)||count<1||count>999)throw new Error('Enter a whole number of packs between 1 and 999.');
       if(!['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse'].includes(supplier))throw new Error('Choose a wholesaler.');
+      if(!['full','partial','unavailable'].includes(scenario))throw new Error('Choose a valid test response.');
       if(typeof notes!=='string'||notes.length>500)throw new Error('Order notes must be at most 500 characters.');
-      const values={id:pack.id,type:pack.type,query:pack.name.slice(0,200),quantity:count,supplier,notes:notes.trim()};
+      const values={id:pack.id,type:pack.type,query:pack.name.slice(0,200),quantity:count,supplier,notes:notes.trim(),scenario};
       const next=JSON.stringify(values);if(next!==signature||!requestId){signature=next;requestId=makeId();}
       return {...values,requestId};
     },
@@ -55,7 +56,7 @@ export function createManualOrderAttempt(makeId=()=>crypto.randomUUID()) {
  * onAdd(payload) imports the pack into the basket; onSend(payload) creates only its direct test order.
  * onClose runs only after a user closes the owned modal, never during component cleanup.
  */
-export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},preferredSupplier='Phoenix',onError=()=>{}}={}) {
+export function mountManualSearch({host,request,onAdd,onSend,onQuote,onClose=()=>{},preferredSupplier='Phoenix',onError=()=>{}}={}) {
   if(!host||typeof request!=='function'||typeof onAdd!=='function')throw new TypeError('A host, request and onAdd callback are required.');
   const doc=host.ownerDocument,instance=++pickerCount,base=`dmd-picker-${instance}`;
   const abort=new AbortController();
@@ -106,7 +107,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
   const money=value=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(Number(value)||0);
   function closeMedicineModal({resetSearch=false,notify=true,force=false}={}) {
     if(!medicineModal||isAdding&&!force)return;
-    const current=medicineModal;medicineModal=null;packSequence++;current.layer.remove();
+    const current=medicineModal;medicineModal=null;packSequence++;clearTimeout(current.quoteTimer);current.quoteSequence=(current.quoteSequence||0)+1;current.layer.remove();
     doc.body.style.overflow=current.previousOverflow;if(current.background)current.background.inert=current.previousInert;
     input.disabled=false;sourceSelect.disabled=false;selected=null;selectedPack=null;packs=[];selection.hidden=true;
     if(resetSearch){input.value='';query='';matches=[];searchSequence++;closeMatches();}
@@ -122,7 +123,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
     const body=node('div','manual-order-content');dialog.append(header,body);layer.append(dialog);
     const background=doc.getElementById('app'),previousOverflow=doc.body.style.overflow,previousInert=background?.inert;
     doc.body.style.overflow='hidden';if(background)background.inert=true;doc.body.append(layer);
-    medicineModal={layer,dialog,body,closeButton,previousOverflow,background,previousInert,initialQuantity,attempt:createManualOrderAttempt()};
+    medicineModal={layer,dialog,body,closeButton,previousOverflow,background,previousInert,initialQuantity,selectedSupplier:preferredSupplier,quoteSequence:0,quoteChain:Promise.resolve(),attempt:createManualOrderAttempt()};
     input.disabled=true;sourceSelect.disabled=true;
     listen(closeButton,'click',()=>closeMedicineModal());
     listen(layer,'click',event=>{event.stopPropagation();if(event.target===layer)closeMedicineModal();});
@@ -138,18 +139,33 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
     });
     queueMicrotask(()=>{if(medicineModal?.dialog===dialog)dialog.focus();});
   }
+  const arrivalLabel=value=>value&&Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'}).format(new Date(value))+' (UK time)':'';
+  function deliveryCard(delivery,acceptedQuantity){
+    const card=node('div','manual-order-delivery');
+    if(!acceptedQuantity){card.append(node('strong','','No delivery expected'),node('p','','No packs were accepted. Unavailable packs are not backordered.'));return card;}
+    const arrival=arrivalLabel(delivery?.estimatedArrivalAt);card.append(node('strong','',delivery?.serviceLabel||'Delivery estimate unavailable'));
+    card.append(node('p','',arrival?'Estimated arrival · '+arrival:'No arrival estimate is available for this supplier.'));
+    if(delivery?.orderBy&&arrivalLabel(delivery.orderBy))card.append(node('p','manual-order-cutoff','Order by '+arrivalLabel(delivery.orderBy)));
+    card.append(node('small','',delivery?.note||'Schedule estimate only. Delivery has not been confirmed by a supplier.'));return card;
+  }
   function renderModalResult(kind,result,count,pack) {
-    const current=medicineModal;if(!current)return;const body=current.body;body.replaceChildren();
-    const state=node('div',`manual-order-result ${kind==='sent'?'is-sent':'is-added'}`);state.setAttribute('role','status');state.setAttribute('aria-live','polite');
-    state.append(node('span','manual-order-result-icon','✓'),node('h3','',kind==='sent'?'Test order accepted':'Added to basket'));
-    state.append(node('p','manual-order-result-name',pack.name));
+    const current=medicineModal;if(!current)return;clearTimeout(current.quoteTimer);current.quoteSequence++;const body=current.body;body.replaceChildren();
+    const order=result?.order,fulfilment=order?.fulfilment,accepted=fulfilment?.acceptedQuantity??order?.items?.[0]?.acceptedQuantity??count,requested=fulfilment?.requestedQuantity??count,outstanding=fulfilment?.outstandingQuantity??Math.max(0,requested-accepted);
+    const outcome=kind==='sent'?(fulfilment?.status||(order?.status==='Not accepted'?'unavailable':'accepted')):'added';
+    const title=outcome==='unavailable'?'Test order not accepted':outcome==='partial'?'Part of your test order accepted':kind==='sent'?'Test order accepted':'Added to basket';
+    const state=node('div',`manual-order-result ${outcome==='partial'?'is-partial':outcome==='unavailable'?'is-unavailable':kind==='sent'?'is-sent':'is-added'}`);state.setAttribute('role','status');state.setAttribute('aria-live','polite');
+    state.append(node('span','manual-order-result-icon',outcome==='unavailable'?'—':outcome==='partial'?'!':'✓'),node('h3','',title),node('p','manual-order-result-name',pack.name));
     if(kind==='sent'){
-      const order=result.order,details=node('dl','manual-order-result-details');
-      const values=[['Order reference',order.id],['Wholesaler',order.supplier],['Result',order.status||'Awaiting'],['Pack',packLabel(pack)],['Packs',String(order.items?.[0]?.quantity??count)],['Order total',money(order.total)]];
-      for(const [label,value] of values){details.append(node('dt','',label),node('dd','',String(value??'—')));}
-      state.append(details,node('p','manual-order-result-note','Simulated response · No real supplier was contacted. Receive this test order in Goods In to update shelf stock.'));
+      const details=node('dl','manual-order-result-details');
+      const values=[['Order reference',order.id],['Coming from',fulfilment?.sourceLabel||order.supplier],['Supplier reference',fulfilment?.supplierReference||'Not provided'],['Pack',packLabel(pack)],['Requested',`${requested} packs`],['Accepted',`${accepted} packs`],['Unavailable',`${outstanding} packs`],['Order total',money(order.total)]];
+      for(const [label,value] of values)details.append(node('dt','',label),node('dd','',String(value??'—')));
+      state.append(details,deliveryCard(fulfilment?.delivery,accepted));
+      if(outstanding)state.append(node('p','manual-order-shortage',`${outstanding} ${outstanding===1?'pack was':'packs were'} not accepted. These packs are not backordered. Review the remaining quantity before placing another order.`));
+      state.append(node('p','manual-order-result-note','Simulated supplier response · No real supplier was contacted. Only accepted packs can be received in Goods In.'));
     }else state.append(node('p','',`${count} ${count===1?'pack is':'packs are'} ready in your basket. You can review and send the basket later.`));
-    const actions=node('div','manual-order-result-actions'),another=node('button','btn','Continue searching'),done=node('button','btn btn-primary','Done');another.type=done.type='button';actions.append(another,done);state.append(actions);body.append(state);
+    const actions=node('div','manual-order-result-actions'),another=node('button','btn','Continue searching'),done=node('button','btn btn-primary','Done');another.type=done.type='button';
+    if(kind==='sent'&&outstanding){const remaining=node('button','btn btn-soft manual-order-remaining','Try remaining packs');remaining.type='button';actions.append(remaining);listen(remaining,'click',()=>{current.initialQuantity=outstanding;current.selectedSupplier=order.supplier;current.attempt=createManualOrderAttempt();renderSelection();current.body.querySelector('select[name="supplier"]')?.focus();});}
+    actions.append(another,done);state.append(actions);body.append(state);
     listen(another,'click',()=>closeMedicineModal({resetSearch:true}));listen(done,'click',()=>closeMedicineModal());current.closeButton.disabled=false;done.focus();
   }
   function renderSelection(){
@@ -165,34 +181,43 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
     const row=node('div','manual-order-fields'),quantityField=node('label','field manual-order-quantity');quantityField.htmlFor=`${base}-quantity`;quantityField.append(node('span','','Number of packs'));
     const quantity=node('input','');quantity.id=`${base}-quantity`;quantity.name='quantity';quantity.type='number';quantity.min='1';quantity.max='999';quantity.step='1';quantity.required=true;quantity.value=String(current.initialQuantity);quantity.setAttribute('inputmode','numeric');quantityField.append(quantity);
     const supplierField=node('label','field manual-order-supplier');supplierField.htmlFor=`${base}-supplier`;supplierField.append(node('span','','Send to wholesaler'));
-    const supplier=node('select','');supplier.id=`${base}-supplier`;supplier.name='supplier';for(const name of ['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse']){const option=node('option','',name);option.value=name;option.selected=name===preferredSupplier;supplier.append(option);}supplierField.append(supplier);row.append(quantityField,supplierField);
+    const supplier=node('select','');supplier.id=`${base}-supplier`;supplier.name='supplier';for(const name of ['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse']){const option=node('option','',name);option.value=name;option.selected=name===current.selectedSupplier;supplier.append(option);}supplierField.append(supplier);row.append(quantityField,supplierField);
+    const simulation=node('details','manual-order-simulation');simulation.append(node('summary','','Test response'));const scenarioField=node('label','field');scenarioField.append(node('span','','Simulate supplier response'));const scenario=node('select','');scenario.name='scenario';for(const [value,text] of [['full','All packs accepted'],['partial','Some packs unavailable'],['unavailable','No packs available']]){const option=node('option','',text);option.value=value;scenario.append(option);}scenario.value='full';scenarioField.append(scenario);simulation.append(scenarioField,node('small','','For testing only. No supplier is contacted.'));
+    const quotePanel=node('section','manual-order-quote');quotePanel.setAttribute('aria-label','Supplier quote');quotePanel.setAttribute('aria-live','polite');
     const notesField=node('label','field');notesField.htmlFor=`${base}-notes`;notesField.append(node('span','','Order note (optional)'));const notes=node('textarea','');notes.id=`${base}-notes`;notes.name='notes';notes.maxLength=500;notes.rows=2;notes.placeholder='Add a note for this test order';notesField.append(notes);
     const notesDetails=node('details','manual-order-notes');notesDetails.append(node('summary','','Add an order note'),notesField);
     const reference=node('p','manual-order-reference',packReference(selectedPack));
     const referenceDetails=node('details','manual-order-provenance');referenceDetails.append(node('summary','','Medicine details'),reference);
     const message=node('p','manual-order-status');message.setAttribute('role','status');message.setAttribute('aria-live','polite');message.tabIndex=-1;
     const actions=node('div','manual-order-actions'),add=node('button','btn manual-order-add','Add to basket'),send=node('button','btn btn-primary manual-order-send','Send now');add.type='button';send.type='submit';send.disabled=typeof onSend!=='function';actions.append(add,send);
-    form.append(packField,row,notesDetails,referenceDetails,node('p','manual-order-info','Send now orders only this item. Your basket stays unchanged.'),message,actions);body.append(form);
+    form.append(packField,row,quotePanel,notesDetails,simulation,referenceDetails,node('p','manual-order-info','Send now orders only this item. Your basket stays unchanged.'),message,actions);body.append(form);
     if(typeof onSend!=='function')message.textContent='Direct sending is unavailable. You can still add this item to the basket.';
-    const controls=[packSelect,quantity,supplier,notes,add,send,current.closeButton];
+    const controls=[packSelect,quantity,supplier,scenario,notes,add,send,current.closeButton];
+    let quoteValue=null,quoteLoading=false;
+    const updateActions=()=>{send.disabled=typeof onSend!=='function'||isAdding||(typeof onQuote==='function'&&(quoteLoading||!quoteValue));add.disabled=isAdding||quoteLoading;};
+    const quotePayload=()=>({id:selectedPack.id,type:selectedPack.type,query:selectedPack.name.slice(0,200),quantity:Number(quantity.value),supplier:supplier.value,scenario:scenario.value});
+    const renderQuote=quote=>{quotePanel.replaceChildren();const header=node('div','manual-order-quote-heading'),heading=node('h3','','Supplier estimate'),statusLabel=quote.status==='partial'?'Part available':quote.status==='unavailable'?'Unavailable':'Available';header.append(heading,node('span',`manual-order-quote-status is-${quote.status}`,statusLabel));const details=node('dl','manual-order-quote-details');for(const [label,value] of [['Coming from',quote.sourceLabel||quote.supplier],['Available',`${quote.acceptedQuantity} of ${quote.requestedQuantity} packs`],['Unavailable',`${quote.outstandingQuantity} packs`],['Test unit cost',money(quote.unitPrice)],['Accepted total',money(quote.estimatedTotal)]])details.append(node('dt','',label),node('dd','',String(value)));quotePanel.append(header,details,deliveryCard(quote.delivery,quote.acceptedQuantity),node('small','manual-order-compare-hint','Change wholesaler to compare its delivery estimate. Prices and availability are simulated.'));};
+    const loadQuote=()=>{if(typeof onQuote!=='function'){quotePanel.hidden=true;return;}clearTimeout(current.quoteTimer);const sequence=++current.quoteSequence;quoteValue=null;quoteLoading=true;quotePanel.replaceChildren(node('p','manual-order-quote-loading','Checking packs, price and delivery…'));updateActions();const payload=quotePayload();if(!Number.isInteger(payload.quantity)||payload.quantity<1||payload.quantity>999){quoteLoading=false;quotePanel.replaceChildren(node('p','manual-order-quote-error','Enter a whole number of packs between 1 and 999 to check delivery.'));updateActions();return;}current.quoteTimer=setTimeout(()=>{current.quoteChain=current.quoteChain.catch(()=>{}).then(async()=>{if(!alive||medicineModal!==current||sequence!==current.quoteSequence||!form.isConnected)return;try{const quote=await onQuote(payload);if(!alive||medicineModal!==current||sequence!==current.quoteSequence||!form.isConnected)return;if(!quote||!['accepted','partial','unavailable'].includes(quote.status)||!Number.isInteger(quote.acceptedQuantity)||!Number.isInteger(quote.requestedQuantity))throw new Error('The quote response was incomplete. Please retry.');quoteValue=quote;renderQuote(quote);}catch(error){if(!alive||medicineModal!==current||sequence!==current.quoteSequence||!form.isConnected)return;quotePanel.replaceChildren(node('p','manual-order-quote-error',error?.message||'Could not check this supplier.'));const retry=node('button','btn btn-soft manual-order-quote-retry','Retry supplier check');retry.type='button';quotePanel.append(retry);listen(retry,'click',loadQuote);}finally{if(alive&&medicineModal===current&&sequence===current.quoteSequence&&form.isConnected){quoteLoading=false;updateActions();}}});},180);};
     const edit=()=>{current.attempt.invalidate();message.textContent='';message.classList.remove('is-error');};
-    listen(packSelect,'change',()=>{selectedPack=packs[Number(packSelect.value)]||null;reference.textContent=packReference(selectedPack);edit();});
-    for(const control of [quantity,supplier,notes])listen(control,'input',edit);
-    listen(supplier,'change',edit);
+    listen(packSelect,'change',()=>{selectedPack=packs[Number(packSelect.value)]||null;reference.textContent=packReference(selectedPack);edit();loadQuote();});
+    listen(notes,'input',edit);listen(quantity,'input',()=>{edit();loadQuote();});
+    listen(supplier,'change',()=>{current.selectedSupplier=supplier.value;edit();loadQuote();});listen(scenario,'change',()=>{edit();loadQuote();});
     const submit=async kind=>{
       if(isAdding||!selectedPack||medicineModal!==current)return;
-      let payload;try{payload=current.attempt.prepare(selectedPack,{quantity:quantity.value,supplier:supplier.value,notes:notes.value});}catch(error){message.textContent=error.message;message.classList.add('is-error');quantity.focus();return;}
+      let payload;try{payload=current.attempt.prepare(selectedPack,{quantity:quantity.value,supplier:supplier.value,notes:notes.value,scenario:scenario.value});}catch(error){message.textContent=error.message;message.classList.add('is-error');quantity.focus();return;}
       if(kind==='sent'&&typeof onSend!=='function')return;
+      if(quoteLoading||kind==='sent'&&typeof onQuote==='function'&&!quoteValue){message.textContent='Check the supplier estimate before sending. You can retry the supplier check above.';return;}
       const pack=selectedPack;isAdding=true;controls.forEach(control=>control.disabled=true);message.classList.remove('is-error');message.textContent=kind==='sent'?'Sending test order…':'Adding to basket…';message.focus();send.textContent=kind==='sent'?'Sending…':'Send now';add.textContent=kind==='added'?'Adding…':'Add to basket';
       try{
         const result=await (kind==='sent'?onSend(payload):onAdd(payload));
         if(kind==='sent'&&(!result?.order?.id||typeof result.order.id!=='string'))throw new Error('The order response was incomplete. Try again to check the same request.');
-        current.attempt.complete();if(alive&&medicineModal===current){renderModalResult(kind,result,payload.quantity,pack);setStatus(kind==='sent'?`Test order ${result.order.id} accepted.`:`${payload.quantity} packs added to the test basket.`);}
+        current.attempt.complete();if(alive&&medicineModal===current){renderModalResult(kind,result,payload.quantity,pack);setStatus(kind==='sent'?`Test order ${result.order.id}: ${result.order.fulfilment?.status||'accepted'}.`:`${payload.quantity} packs added to the test basket.`);}
       }catch(error){if(alive&&medicineModal===current){message.textContent=error?.message||'The request could not be completed. Try again.';message.classList.add('is-error');onError(error);}}
-      finally{isAdding=false;if(alive&&medicineModal===current&&form.isConnected){controls.forEach(control=>control.disabled=false);send.disabled=typeof onSend!=='function';send.textContent='Send now';add.textContent='Add to basket';if(message.classList.contains('is-error'))send.focus();}}
+      finally{isAdding=false;if(alive&&medicineModal===current&&form.isConnected){controls.forEach(control=>control.disabled=false);updateActions();send.textContent='Send now';add.textContent='Add to basket';if(message.classList.contains('is-error'))send.focus();}}
     };
     listen(add,'click',event=>{event.preventDefault();void submit('added');});
     listen(form,'submit',event=>{event.preventDefault();event.stopPropagation();void submit('sent');});
+    loadQuote();
   }
   async function chooseMatch(index,initialQuantity=1){
     const match=matches[index];if(!match||isAdding)return;

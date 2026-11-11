@@ -1,6 +1,6 @@
 {
   "title": "StockIQ sandbox API",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "purpose": "Self-contained draft endpoints for synthetic workflow testing. This is not the production StockIQ API contract.",
   "base_url": "Same origin as the draft website. Use relative /api/... paths only.",
   "network_rules": [
@@ -23,7 +23,8 @@
       "drafts_per_workspace": 200,
       "claims_per_workspace": 200,
       "feedback_records_per_workspace": 200,
-      "body_characters": 262144
+      "body_characters": 262144,
+      "snapshot_body_characters": 1048576
     },
     "security": "The workspace id is a demo isolation key, not production authentication or authorization. This server must not be connected to sensitive or live data."
   },
@@ -47,11 +48,13 @@
   "validation": {
     "quantities": "Whole numbers from 1 through 999 unless an endpoint states a different range.",
     "known_test_suppliers": [
-      "Bestway",
-      "Alliance Healthcare",
+      "Phoenix",
+      "Alliance",
       "AAH",
-      "Lexon",
-      "Sigma"
+      "BNS",
+      "Sigma",
+      "Trident",
+      "Warehouse"
     ],
     "common_errors": {
       "400": "Malformed JSON, invalid field, empty basket or invalid quantity.",
@@ -156,7 +159,7 @@
       "description": "Creates a test order from the current basket and empties the basket.",
       "success_status": 201,
       "request_body": {
-        "supplier": "Bestway",
+        "supplier": "Phoenix",
         "source": "manual",
         "notes": "Optional test order notes"
       },
@@ -504,9 +507,10 @@
       "quantity": 2,
       "supplier": "AAH",
       "notes": "Optional order note",
-      "requestId": "per-attempt UUID retained for retries"
+      "requestId": "per-attempt UUID retained for retries",
+      "scenario": "Optional full (default), partial or unavailable test response"
     },
-    "result": "data.order, data.simulated true, data.replayed, data.message",
+    "result": "data.order with fulfilment metadata; data.simulated true; data.replayed; data.message",
     "status": {
       "201": "Single-line test order created",
       "200": "Existing matching request result replayed",
@@ -517,6 +521,58 @@
       "Shelf stock is unchanged until receiving",
       "Only the chosen product and quantity are ordered",
       "No real supplier endpoint is called"
+    ]
+  },
+  "supplierQuotes": {
+    "method": "POST",
+    "path": "/api/orders/quote",
+    "body": {
+      "productId": "canonical workspace product id",
+      "quantity": 3,
+      "supplier": "AAH",
+      "scenario": "full | partial | unavailable (default full)"
+    },
+    "result": [
+      "sourceLabel",
+      "status",
+      "requestedQuantity",
+      "acceptedQuantity",
+      "outstandingQuantity",
+      "unitPrice",
+      "estimatedTotal",
+      "delivery"
+    ],
+    "invariants": [
+      "Read-only: no order, basket, shelf stock or workspace change",
+      "Same deterministic acceptance and cost policy as submission",
+      "Supplier quantities, prices and references are explicitly simulated"
+    ]
+  },
+  "orderFulfilment": {
+    "location": "order.fulfilment and quantity fields on each order.items line",
+    "status": "accepted | partial | unavailable; independent of receipt status",
+    "quantities": {
+      "requestedQuantity": "Packs requested",
+      "acceptedQuantity": "Packs accepted by the simulated supplier",
+      "outstandingQuantity": "Requested minus accepted; unavailable, NOT a backorder",
+      "received": "Physically checked-in accepted packs"
+    },
+    "delivery": {
+      "estimatedArrivalAt": "ISO instant or null if unavailable/unconfigured",
+      "orderBy": "Applicable cutoff instant",
+      "workingDays": "Working days from submitted London calendar date",
+      "serviceLabel": "Same day, Next working day, N working days or unknown",
+      "basis": "schedule_estimate",
+      "timezone": "Europe/London",
+      "note": "Explains estimate basis; no supplier promise"
+    },
+    "rules": [
+      "Saved van offset counts working days, skipping weekends and England/Wales standard bank holidays",
+      "Explicitly configured weekend order cutoff days are supported",
+      "Without a supplier schedule a labelled weekday default is used; explicit empty schedule yields unknown ETA",
+      "The accepted result and delivery estimate stay fixed across retries, snapshot restoration and later schedule edits",
+      "Receipts cannot include packs that were not accepted; stock changes only on receipt",
+      "Legacy workspace orders without acceptance metadata remain valid"
     ]
   }
 }

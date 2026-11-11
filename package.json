@@ -8,7 +8,7 @@
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
     "start": "node server/local.mjs",
-    "check": "node --check src/app.js && node --check src/views.js && node --check server/api.mjs && node --check server/dmd.mjs && node --check src/manual-search.js && node --check src/parity-actions.js && node --check src/icons.js && node --check src/manual-orders.js"
+    "check": "node --check src/app.js && node --check src/views.js && node --check server/api.mjs && node --check server/dmd.mjs && node --check src/manual-search.js && node --check src/parity-actions.js && node --check src/icons.js && node --check src/manual-orders.js && node --check src/order-summary.js && node --check server/fulfilment.mjs"
   },
   "engines": {
     "node": ">=22"

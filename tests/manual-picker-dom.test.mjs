@@ -5,7 +5,7 @@ import {mountManualSearch} from '../src/manual-search.js';
 
 const pack={id:'1477411000001105',type:'AMPP',name:'Amoxicillin 500mg capsules',pack:'100 capsule',source:'NHS dm+d'};
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-function setup({record=pack,packError=false}={}){
+function setup({record=pack,packError=false,onQuote,onAdd=async()=>({}),onSend=async()=>({order:{id:'TEST-2000',status:'Awaiting',supplier:'AAH',items:[{quantity:1}],total:1},simulated:true})}={}){
  const {document,window}=parseHTML('<!doctype html><html><body><div id="app"><div id="host"></div></div></body></html>');
  // Linkedom omits selection setters and focus state; supply browser-like behavior
  // without replacing application event listeners or component code.
@@ -14,7 +14,7 @@ function setup({record=pack,packError=false}={}){
  let focused=document.body;Object.defineProperty(document,'activeElement',{configurable:true,get:()=>focused});
  window.HTMLElement.prototype.focus=function(){focused=this;this.dispatchEvent(new window.Event('focus'));};
  const request=async path=>path.startsWith('/api/dmd/packs')?{ok:!packError,error:packError?'Pack service unavailable':undefined,data:{packs:[pack]}}:{ok:true,data:{matches:[record],releaseDate:'2026-11-09'}};
- const cleanup=mountManualSearch({host:document.querySelector('#host'),request,onAdd:async()=>({}),onSend:async()=>({order:{id:'TEST-2000',status:'Awaiting',supplier:'AAH',items:[{quantity:1}],total:1},simulated:true})});
+ const cleanup=mountManualSearch({host:document.querySelector('#host'),request,onAdd,onSend,onQuote});
  const emit=(target,type,properties={})=>{const event=new window.Event(type,{bubbles:true,cancelable:true});for(const [name,value] of Object.entries(properties))Object.defineProperty(event,name,{value});target.dispatchEvent(event);return event;};
  return {document,window,cleanup,emit,setFocused:element=>focused=element,input:document.querySelector('.dmd-query')};
 }
@@ -28,3 +28,27 @@ test('pen tap opens the modal and a scrolling touch gesture does not select a re
 test('mouse/native click and keyboard Enter continue to open the selected medicine',async()=>{for(const mode of ['click','keyboard']){const c=setup();try{const option=await results(c);if(mode==='click'){c.emit(option,'pointerdown',{pointerType:'mouse',pointerId:1,clientX:30,clientY:40});c.emit(option,'click');}else{c.emit(c.input,'keydown',{key:'ArrowDown'});c.emit(c.input,'keydown',{key:'Enter'});}assert.ok(c.document.querySelector('[role="dialog"]')?.isConnected,mode);assert.ok(buttons(c.document).includes('Send now'));}finally{c.cleanup();}}});
 
 test('grouped pack lookup errors are displayed inside the opened modal',async()=>{const c=setup({record:{id:'39732411000001106',type:'VMP',name:'Amoxicillin 500mg capsules'},packError:true});try{const option=await results(c);c.emit(option,'click');await Promise.resolve();await Promise.resolve();const dialog=c.document.querySelector('[role="dialog"]');assert.ok(dialog?.isConnected);assert.match(dialog.textContent,/Pack service unavailable/);assert.equal(c.document.querySelector('.manual-order-send'),null);}finally{c.cleanup();}});
+
+const quoteFixture=(selection,extra={})=>({simulated:true,scenario:selection.scenario||'full',supplier:selection.supplier,sourceLabel:selection.supplier,status:'accepted',requestedQuantity:selection.quantity,acceptedQuantity:selection.quantity,outstandingQuantity:0,unitPrice:1.25,estimatedTotal:selection.quantity*1.25,delivery:{estimatedArrivalAt:'2026-11-12T09:00:00Z',orderBy:'2026-11-11T19:00:00Z',workingDays:1,serviceLabel:'Next working day',basis:'schedule_estimate',timezone:'Europe/London',note:'Estimated from the saved test schedule; supplier delivery is not confirmed.'},...extra});
+async function waitFor(check){for(let i=0;i<70;i++){if(check())return;await pause(15);}throw new Error('Expected picker state did not appear');}
+
+test('supplier estimates prevent sending while loading and show source, price, quantities and dated delivery',async()=>{
+ let finish,sendCalls=0;const c=setup({onQuote:selection=>new Promise(resolve=>finish=()=>resolve(quoteFixture(selection))),onSend:async()=>{sendCalls++;return {};}});
+ try{const option=await results(c);c.emit(option,'click');await waitFor(()=>finish);const form=c.document.querySelector('.manual-order-form');assert.equal(form.querySelector('.manual-order-send').disabled,true);c.emit(form,'submit');assert.equal(sendCalls,0);finish();await waitFor(()=>!form.querySelector('.manual-order-send').disabled);const quote=c.document.querySelector('.manual-order-quote');assert.match(quote.textContent,/Coming fromPhoenix/);assert.match(quote.textContent,/1 of 1 packs/);assert.match(quote.textContent,/£1.25/);assert.match(quote.textContent,/Next working day/);assert.match(quote.textContent,/12 Nov/);assert.match(quote.textContent,/not confirmed/);}finally{c.cleanup();}
+});
+
+test('edited supplier discards the stale quote and quotes are serialized before sending',async()=>{
+ const pending=[],calls=[];const c=setup({onQuote:selection=>{calls.push(selection.supplier);return new Promise(resolve=>pending.push(()=>resolve(quoteFixture(selection))));}});
+ try{const option=await results(c);c.emit(option,'click');await waitFor(()=>pending.length===1);const supplier=c.document.querySelector('select[name="supplier"]');supplier.value='AAH';c.emit(supplier,'change');await pause(200);assert.deepEqual(calls,['Phoenix']);pending[0]();await waitFor(()=>pending.length===2);assert.equal(c.document.querySelector('.manual-order-send').disabled,true);assert.doesNotMatch(c.document.querySelector('.manual-order-quote').textContent,/Coming fromPhoenix/);pending[1]();await waitFor(()=>!c.document.querySelector('.manual-order-send').disabled);assert.deepEqual(calls,['Phoenix','AAH']);assert.match(c.document.querySelector('.manual-order-quote').textContent,/Coming fromAAH/);}finally{c.cleanup();}
+});
+
+test('quote errors retain Add to basket and require a successful retry before sending',async()=>{
+ let fail=true;const c=setup({onQuote:async selection=>{if(fail)throw new Error('Supplier check unavailable');return quoteFixture(selection);}});
+ try{const option=await results(c);c.emit(option,'click');await waitFor(()=>c.document.querySelector('.manual-order-quote-retry'));assert.equal(c.document.querySelector('.manual-order-send').disabled,true);assert.equal(c.document.querySelector('.manual-order-add').disabled,false);assert.match(c.document.querySelector('.manual-order-quote').textContent,/Supplier check unavailable/);fail=false;c.document.querySelector('.manual-order-quote-retry').click();await waitFor(()=>!c.document.querySelector('.manual-order-send').disabled);assert.match(c.document.querySelector('.manual-order-quote').textContent,/Available/);}finally{c.cleanup();}
+});
+
+test('partial and unavailable responses report actual accepted packs and only retry the remainder on request',async()=>{
+ for(const outcome of ['partial','unavailable']){let sends=0;const responses=[];const c=setup({onQuote:async selection=>quoteFixture(selection),onSend:async selection=>{sends++;responses.push(selection);const accepted=outcome==='partial'?2:0;return {order:{id:'TEST-2001',supplier:selection.supplier,total:accepted*1.25,items:[{quantity:selection.quantity,acceptedQuantity:accepted}],fulfilment:quoteFixture(selection,{status:outcome,acceptedQuantity:accepted,outstandingQuantity:selection.quantity-accepted,supplierReference:'SIM-AAH-2001'})},simulated:true};}});
+  try{c.cleanup.openProduct(pack,{quantity:5});await waitFor(()=>!c.document.querySelector('.manual-order-send').disabled);const scenario=c.document.querySelector('select[name="scenario"]');scenario.value=outcome;c.emit(scenario,'change');await waitFor(()=>!c.document.querySelector('.manual-order-send').disabled);c.emit(c.document.querySelector('.manual-order-form'),'submit');await waitFor(()=>c.document.querySelector('.manual-order-result'));const result=c.document.querySelector('.manual-order-result');assert.equal(sends,1);assert.equal(responses[0].scenario,outcome);assert.ok(result.classList.contains('is-'+outcome));assert.doesNotMatch(result.querySelector('h3').textContent,/^Test order accepted$/);assert.match(result.textContent,/SIM-AAH-2001/);assert.match(result.textContent,outcome==='partial'?/Accepted2 packs/:/Accepted0 packs/);assert.match(result.textContent,/not backordered/);if(outcome==='unavailable')assert.match(result.textContent,/No delivery expected/);result.querySelector('.manual-order-remaining').click();assert.equal(c.document.querySelector('input[name="quantity"]').value,outcome==='partial'?'3':'5');assert.equal(sends,1,'Reviewing the remainder never automatically sends an order');assert.equal(c.document.querySelector('.manual-order-result'),null);}finally{c.cleanup();}
+ }
+});
