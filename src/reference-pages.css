@@ -1,0 +1,371 @@
+/* Page-level values from the original published StockIQ styles and captured screens.
+   Preserve the added scan, direct-add, supplier-result and modal workflows. */
+#main-content { padding:16px 4px 40px; }
+#main-content.view-manual { padding:4px 4px 90px; }
+#main-content.view-goods,#main-content.view-analytics { padding-top:0; }
+#main-content.view-analytics { background:#f9fafb; }
+#main-content .stock-page-auto>.app-page-heading,
+#main-content .stock-page-manual>.app-page-heading,
+#main-content .stock-page-history>.app-page-heading,
+#main-content .stock-page-analytics>.app-page-heading {
+  position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0);
+  white-space:nowrap; padding:0; margin:-1px; border:0;
+}
+
+/* Auto Orders: gray segmented tray, white active tab and compact striped rows. */
+#main-content .stock-page-auto .auto-toolbar { margin:8px 0 16px; gap:16px; }
+#main-content .stock-page-auto .auto-toolbar>.tabs { gap:4px; padding:4px; border-radius:12px; background:#e5e5ea; }
+#main-content .stock-page-auto .auto-toolbar .tab { min-height:32px; padding:6px 12px; border:0; border-radius:8px; background:transparent; color:#6b7280; font-size:14px; font-weight:600; }
+#main-content .stock-page-auto .auto-toolbar .tab.active { color:#6d28d9; background:#fff; box-shadow:0 1px 3px #0000001f; }
+#main-content .stock-page-auto .auto-toolbar .count { padding:2px 8px; min-width:0; border-radius:999px; font-size:12px; font-weight:600; line-height:16px; }
+#main-content .stock-page-auto [data-subtab=orders] .count { color:#92400e; background:#fef3c7; }
+#main-content .stock-page-auto [data-subtab=fast] .count { color:#065f46; background:#d1fae5; }
+#main-content .stock-page-auto [data-subtab=otc] .count { color:#075985; background:#e0f2fe; }
+#main-content .stock-page-auto .auto-toolbar .search-field { border-color:#e5e7eb; border-radius:8px; min-height:36px; background:#fff; }
+#main-content .stock-page-auto .auto-toolbar .search-field input { min-height:34px; height:34px; font-size:14px!important; color:#111827; background:transparent; border:0; }
+#main-content .stock-page-auto .auto-buttons { gap:12px; }
+#main-content .stock-page-auto .auto-buttons .btn { min-height:32px; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:600; }
+#main-content .stock-page-auto .auto-buttons .btn-text { color:#4b5563; border-color:#e5e7eb; background:transparent; }
+#main-content .stock-page-auto .auto-buttons .btn-danger { color:#dc2626; border-color:#fecaca; background:transparent; }
+#main-content .stock-page-auto .auto-buttons .btn-add { color:#fff; background:#059669; border-color:#059669; }
+#main-content .stock-page-auto .original-auto>.panel { border:1px solid #f3f4f6; border-radius:16px; box-shadow:0 1px 2px #0000000d; }
+#main-content .stock-page-auto .data-table th { padding:6px 4px; color:#9ca3af; background:#f9fafb80; font-size:10px; font-weight:700; letter-spacing:.25px; }
+#main-content .stock-page-auto .data-table td { padding:6px 4px; height:42px; border-color:#f3f4f6; color:#4b5563; font-size:12px; }
+#main-content .stock-page-auto .data-table tbody tr:nth-child(odd) { background:#f9fafb; }
+#main-content .stock-page-auto .data-table tbody tr:nth-child(even) { background:#fff; }
+#main-content .stock-page-auto .data-table tbody tr:hover { background:#f3f4f6; }
+#main-content .stock-page-auto .data-table .product-link { color:#111827; font-size:14px; font-weight:500; line-height:20px; }
+#main-content .stock-page-auto .data-table .check-cell { padding-left:4px; width:26px; }
+#main-content .stock-page-auto .data-table input[type=checkbox] { width:16px; height:16px; accent-color:#059669; }
+#main-content .stock-page-auto .data-table input[type=number] { width:64px; min-height:30px; padding:5px 7px; border-radius:8px; border-color:#e5e7eb; font-size:11px; font-weight:400; }
+#main-content .stock-page-auto .data-table .btn-add { min-height:26px; padding:4px 12px; border:0; border-radius:8px; color:#fff; background:#059669; font-size:11px; font-weight:700; }
+#main-content .stock-page-auto .badge.purple-outline { padding:5px 8px; color:#4f46e5; background:#fff; border:1px solid #c7d2fe; border-radius:6px; font-size:10px; }
+#main-content .stock-page-auto .badge.amber-outline { padding:4px 8px; color:#b45309; background:#fff; border:1px solid #fcd34d; border-radius:999px; font-size:10px; }
+
+/* Manual Orders: original search surface, amber reference cards and blue footer. */
+#main-content .stock-page-manual .original-manual { grid-template-columns:minmax(0,1fr) 320px; gap:4px; padding-bottom:80px; align-items:start; }
+#main-content .stock-page-manual .manual-main { background:transparent; min-width:0; }
+#main-content .stock-page-manual .manual-main .manual-dmd { margin:0 0 12px; border:0; border-radius:0; background:#fff; box-shadow:none; overflow:visible; }
+#main-content .stock-page-manual .manual-main .dmd-content { padding:12px 4px; border-radius:0; background:#fff; }
+#main-content .stock-page-manual .manual-main .dmd-search-label { margin-bottom:6px; color:#4b5563; font-size:12px; font-weight:600; }
+#main-content .stock-page-manual .manual-main .dmd-query { min-height:44px; height:44px; padding:12px 16px 12px 44px; border:0; border-radius:12px; color:#111827; background:#f3f4f6; font-size:14px; }
+#main-content .stock-page-manual .manual-main .dmd-query::placeholder { color:#9ca3af; font-size:14px; }
+#main-content .stock-page-manual .manual-main .dmd-query:focus { background:#fff; box-shadow:0 0 0 2px #3b82f6; outline:none; }
+#main-content .stock-page-manual .dmd-search-icon { color:#9ca3af; font-size:22px; left:15px; top:11px; }
+#main-content .stock-page-manual .dmd-search-status { margin:6px 0 0; color:#6b7280; font-size:11px; }
+#main-content .stock-page-manual .dmd-catalogue-meta { margin-top:8px; padding-top:8px; border-color:#e5e7eb; }
+#main-content .stock-page-manual .dmd-source-select { min-height:32px; border-color:#e5e7eb; border-radius:8px; background:#f3f4f6; color:#4b5563; font-size:12px; }
+#main-content .stock-page-manual .dmd-popover { border-color:#e5e7eb; border-radius:12px; background:#fff; box-shadow:0 10px 15px -3px #0000001a,0 4px 6px -4px #0000001a; }
+#main-content .stock-page-manual .dmd-options { padding:4px; }
+#main-content .stock-page-manual .dmd-option { min-height:52px; padding:10px; border-radius:8px; }
+#main-content .stock-page-manual .dmd-option strong { color:#111827; font-size:14px; font-weight:400; line-height:20px; }
+#main-content .stock-page-manual .dmd-option small { margin-top:3px; color:#6b7280; font-size:12px; line-height:16px; }
+#main-content .stock-page-manual .dmd-type { color:#6d28d9; background:#f5f3ff; border-color:#ddd6fe; border-radius:6px; }
+#main-content .stock-page-manual .dmd-quick-add,
+#main-content .stock-page-manual .manual-quick-basket .btn { color:#fff; background:#10b981; border-color:#10b981; border-radius:8px; font-weight:600; }
+#main-content .stock-page-manual .dmd-quick-add:hover,
+#main-content .stock-page-manual .manual-quick-basket .btn:hover { color:#fff; background:#059669; border-color:#059669; }
+#main-content .stock-page-manual .manual-guidance { margin:0; padding:14px 8px; color:#6b7280; font-size:13px; }
+#main-content .stock-page-manual .concessions-sidebar { top:60px; padding:12px 4px; max-height:calc(100dvh - 140px); border:0; border-left:1px solid #e5e7eb; border-radius:0; background:#fff; }
+#main-content .stock-page-manual .concessions-sidebar h2 { display:flex; align-items:center; gap:8px; margin:0 0 10px; color:#111827; font-size:16px; font-weight:700; line-height:24px; }
+#main-content .stock-page-manual .concessions-sidebar h2::before { content:""; width:8px; height:8px; flex:none; border-radius:50%; background:#f59e0b; }
+#main-content .stock-page-manual .concession-search { min-height:28px; margin-bottom:6px; border-color:#e5e7eb; border-radius:6px; }
+#main-content .stock-page-manual .concession-search input { min-height:26px; padding:4px 6px; color:#111827; font-size:12px; }
+#main-content .stock-page-manual .concession-note { color:#9ca3af; font-size:10px; margin:0 2px 8px; }
+#main-content .stock-page-manual .workspace-product-entry { margin:0 0 8px; background:#fffbeb; border-color:#fde68a; border-radius:8px; }
+#main-content .stock-page-manual .workspace-product-entry>.concession-card { width:100%; min-height:58px; gap:3px; margin:0; padding:9px 5px; border:0; border-radius:0; background:transparent; }
+#main-content .stock-page-manual .workspace-product-entry>.concession-card:hover { background:#fef3c7; }
+#main-content .stock-page-manual .workspace-product-name { color:#111827; font-size:12px; font-weight:400; line-height:17px; }
+#main-content .stock-page-manual .workspace-product-pack,
+#main-content .stock-page-manual .workspace-product-price { color:#6b7280; font-size:12px; font-weight:400; line-height:17px; }
+#main-content .stock-page-manual .workspace-product-price>small { color:#6b7280; font-size:10px; }
+#main-content .stock-page-manual .workspace-product-entry>.manual-quick-basket { padding:8px 5px; border-top-color:#fde68a; }
+#main-content .stock-page-manual .manual-quick-basket label { color:#6b7280; }
+#main-content .stock-page-manual .manual-scan-panel { margin:0 0 12px; padding:12px; border-color:#e5e7eb; border-radius:12px; background:#f9fafb; }
+#main-content .stock-page-manual .manual-scan-heading label { color:#111827; font-size:14px; font-weight:600; }
+#main-content .stock-page-manual .manual-scan-input { color:#111827; background:#fff; border-color:#e5e7eb; border-radius:8px; font-size:14px; }
+#main-content .stock-page-manual .manual-scan-help,
+#main-content .stock-page-manual .manual-scan-status { color:#6b7280; font-size:11px; }
+#main-content .manual-continue { min-height:68px; gap:8px; padding:8px 4px calc(8px + env(safe-area-inset-bottom)); border-top-color:#d1d5db; background:#fff; box-shadow:none; }
+#main-content .manual-continue .supplier-tag { padding:8px 12px; border-radius:8px; font-size:12px; line-height:16px; }
+#main-content .manual-continue .manual-total { color:#6b7280; font-size:12px; }
+#main-content .manual-continue .manual-total strong { color:#111827; font-size:18px; line-height:24px; font-weight:700; }
+#main-content .manual-continue .continue-button { min-height:48px; min-width:144px; padding:12px 20px; color:#fff; border:0; border-radius:12px; background:linear-gradient(to right,#2563eb,#1d4ed8); box-shadow:0 10px 15px -3px #0000001a,0 4px 6px -4px #0000001a; font-size:16px; font-weight:600; }
+#main-content .manual-continue .continue-button:hover { background:linear-gradient(to right,#1d4ed8,#1e40af); box-shadow:0 20px 25px -5px #0000001a,0 8px 10px -6px #0000001a; }
+
+/* Goods In and Advanced: original underline tabs and compact white surfaces. */
+#main-content .stock-page-goods,
+#main-content .stock-page-analytics { padding:0 12px 24px; }
+#main-content .stock-page-goods { display:grid; grid-template-columns:minmax(0,1fr) auto; }
+#main-content .stock-page-goods>* { grid-column:1/-1; min-width:0; }
+#main-content .stock-page-goods>.app-page-heading { grid-column:1; grid-row:2; padding:0 0 28px; align-self:center; }
+#main-content .stock-page-goods>.app-page-heading h1 { color:#111827; font-size:22px; font-weight:700; line-height:28px; letter-spacing:0; }
+#main-content .stock-page-goods>.goods-actions { grid-column:2; grid-row:2; align-self:center; padding:0 0 28px; }
+#main-content .stock-page-goods>.stock-subnav { grid-row:1; }
+#main-content .stock-subnav { margin:0 -4px 20px; padding:0 16px; min-height:44px; background:#fff; border-bottom:1px solid #e5e7eb; }
+#main-content .stock-page-goods>.stock-subnav,
+#main-content .stock-page-analytics>.stock-subnav { margin-left:-16px; margin-right:-16px; }
+#main-content .stock-subnav>.tabs { min-height:44px; padding:0; gap:4px; }
+#main-content .stock-subnav>.tabs button { min-height:44px; padding:10px 12px; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:#6b7280; font-size:14px; font-weight:600; }
+#main-content .stock-subnav>.tabs button.active { color:#4f46e5; background:transparent; border-bottom-color:#4f46e5; box-shadow:none; }
+#main-content .stock-page-analytics .stock-subnav>.tabs button { padding:12px 14px; font-size:13px; font-weight:400; }
+#main-content .stock-page-analytics .stock-subnav>.tabs button.active { color:#7c3aed; border-bottom-color:#7c3aed; font-weight:700; }
+#main-content .stock-page-goods .needs-receipt { margin:0 0 28px; border-color:#dbe4ef; border-left:3px solid #dc2626; border-radius:8px; background:#fff; }
+#main-content .stock-page-goods .needs-receipt>summary { padding:12px; gap:10px; color:#111827; font-size:12px; }
+#main-content .stock-page-goods .delivery-overview { margin-bottom:22px; gap:12px; }
+#main-content .stock-page-goods .delivery-overview-card,
+#main-content .stock-page-goods .delivery-order-card { padding:16px 14px; border-color:#dbe4ef; border-radius:12px; background:#fff; box-shadow:none; }
+#main-content .stock-page-goods .delivery-overview-card>strong { color:#111827; font-size:24px; line-height:32px; font-weight:700; }
+#main-content .stock-page-goods .delivery-overview-card>span { color:#334155; font-size:13px; }
+#main-content .stock-page-goods .delivery-overview-card>small { color:#64748b; font-size:12px; }
+#main-content .stock-page-goods .delivery-order-head .btn { min-height:28px; padding:4px 6px; color:#334155; font-size:12px; }
+#main-content .stock-page-goods .delivery-order-actions .btn-primary { color:#fff; background:#4f46e5; border-color:#4f46e5; }
+#main-content .stock-page-goods .goods-actions .btn-primary { min-height:36px; padding:10px 14px; color:#fff; background:#4f46e5; border-color:#4f46e5; border-radius:8px; font-size:12px; }
+#main-content .stock-page-goods .goods-actions .btn-link { color:#4f46e5; font-size:12px; font-weight:600; }
+#main-content .stock-page-goods .order-progress-summary { padding:10px 12px; border-color:#e2e8f0; background:#f1f5f9; border-radius:8px; color:#64748b; font-size:12px; }
+#main-content .stock-metric { padding:16px; border-color:#e2e8f0; border-radius:12px; }
+#main-content .stock-metric>span { color:#64748b; font-size:11px; font-weight:600; }
+#main-content .stock-metric>strong { color:#1f2937; font-size:28px; font-weight:700; line-height:36px; }
+#main-content .stock-metric>small { color:#94a3b8; font-size:12px; }
+#main-content .van-card { border-radius:12px; }
+#main-content .van-days span { border-radius:6px; }
+#main-content .surplus-intro { background:#f8fafc; border-color:#e2e8f0; border-radius:12px; }
+#main-content .screenshot-import .upload-area { border-color:#cbd5e1; border-radius:12px; background:#f8fafc; }
+
+/* History keeps the repaired grid and date grouping, with original visual tokens. */
+#main-content .stock-page-history .history-controls { padding:10px; margin-bottom:20px; border-color:#e5e7eb; border-radius:12px; background:#fff; }
+#main-content .stock-page-history .history-toolbar { padding-bottom:10px; }
+#main-content .stock-page-history .history-toolbar .tabs { gap:6px; }
+#main-content .stock-page-history .history-toolbar .tab { min-height:28px; padding:6px 10px; border:0; border-radius:999px; color:#4b5563; background:#f3f4f6; font-size:12px; font-weight:600; }
+#main-content .stock-page-history .history-toolbar .tab.active { color:#fff; background:#7c3aed; font-weight:600; box-shadow:none; }
+#main-content .stock-page-history .history-toolbar .count { padding:0; margin-left:4px; color:inherit; font-size:12px; }
+#main-content .stock-page-history .history-filter { gap:5px; font-size:11px; }
+#main-content .stock-page-history .history-filter>span,
+#main-content .stock-page-history .history-filter>label,
+#main-content .stock-page-history .history-result-filter .stock-filter>span { color:#6b7280; font-size:10px; font-weight:500; }
+#main-content .stock-page-history .history-filter input,
+#main-content .stock-page-history .history-filter select,
+#main-content .stock-page-history .history-result-filter select { min-height:30px; height:32px; padding:6px 8px; border:0; border-radius:8px; color:#374151; background:#f3f4f6; font-size:12px; }
+#main-content .stock-page-history .history-search .search-field { height:32px; min-height:32px; border:0; border-radius:8px; background:#f3f4f6; }
+#main-content .stock-page-history .history-search input[type=search] { min-height:30px; height:30px; padding:6px 8px 6px 0; background:transparent; font-size:12px!important; }
+#main-content .stock-page-history .history-filter-actions .btn { min-height:32px; height:32px; padding:6px 8px; font-size:12px; }
+#main-content .stock-page-history .history-status-filter { margin-bottom:16px; color:#9ca3af; font-size:11px; }
+#main-content .stock-page-history .history-layout { gap:4px; grid-template-columns:minmax(0,1fr) 255px; }
+#main-content .stock-page-history .history-timeline { gap:20px; }
+#main-content .stock-page-history .history-day { padding:0; color:#6b7280; text-transform:uppercase; font-size:12px; font-weight:600; }
+#main-content .stock-page-history .history-day time { color:#6b7280; }
+#main-content .stock-page-history .history-day-count { color:#9ca3af; }
+#main-content .stock-page-history .history-order { border-color:#e2e8f0; border-radius:12px; background:#fff; }
+#main-content .stock-page-history .history-order-head { gap:12px; padding:8px 12px; background:#f9fafb; border-color:#e2e8f0; font-size:12px; }
+#main-content .stock-page-history .history-order-identity { gap:8px; }
+#main-content .stock-page-history .history-order-head .supplier-tag { padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; }
+#main-content .stock-page-history .history-order-reference { gap:1px; }
+#main-content .stock-page-history .history-order-reference strong { color:#374151; font-size:12px; font-weight:500; }
+#main-content .stock-page-history .history-order-reference small { color:#475569; font-size:11px; }
+#main-content .stock-page-history .history-order-result { gap:3px; }
+#main-content .stock-page-history .history-order-result>.badge.purple,
+#main-content .stock-page-goods .delivery-order-head>.badge.purple { color:#047857; background:#d1fae5; }
+#main-content .stock-page-history .history-order.is-unavailable .history-order-result>.badge,
+#main-content .stock-page-goods .delivery-order-card.is-unavailable .delivery-order-head>.badge { color:#b91c1c; background:#fee2e2; }
+#main-content .stock-page-history .history-order-total>strong { color:#334155; font-size:13px; font-weight:500; }
+#main-content .stock-page-history .history-order-total>small { font-size:9px; }
+#main-content .stock-page-history .history-order-actions .btn { min-height:28px; padding:4px 6px; color:#374151; font-size:12px; font-weight:600; }
+#main-content .stock-page-history .history-order-actions .btn:last-child { border-color:#e5e7eb; background:#fff; }
+#main-content .stock-page-history .history-fulfilment { gap:6px 14px; padding:8px 12px; background:#fff; border-color:#f1f5f9; font-size:11px; }
+#main-content .stock-page-history .history-fulfilment .delivery-source,
+#main-content .stock-page-history .history-fulfilment .delivery-estimate { color:#475569; font-size:11px; }
+#main-content .stock-page-history .history-fulfilment .delivery-source small,
+#main-content .stock-page-history .history-fulfilment .delivery-estimate small { color:#94a3b8; font-size:10px; }
+#main-content .stock-page-history .history-fulfilment .fulfilment-counts { gap:3px 10px; color:#6b7280; font-size:10px; }
+#main-content .stock-page-history .history-line { min-height:44px; padding:6px 12px; gap:10px; border-color:#f1f5f9; font-size:14px; }
+#main-content .stock-page-history .history-line:nth-child(odd) { background:#f8fafc; }
+#main-content .stock-page-history .history-line:nth-child(even) { background:#fff; }
+#main-content .stock-page-history .history-line>.history-product { display:block; line-height:20px; }
+#main-content .stock-page-history .history-product strong { color:#1f2937; font-size:14px; font-weight:400; line-height:20px; }
+#main-content .stock-page-history .history-product small { display:inline; margin-left:4px; color:#6b7280; font-size:12px; line-height:20px; }
+#main-content .stock-page-history .history-product .supplier-tag { display:inline-block; margin-left:5px; padding:0 4px; border-radius:4px; color:#fff; font-size:9px; font-weight:700; line-height:16px; vertical-align:middle; }
+#main-content .stock-page-history .history-line-quantities { gap:2px; color:#64748b; }
+#main-content .stock-page-history .history-line-quantities strong { font-size:11px; font-weight:500; }
+#main-content .stock-page-history .history-line-quantities small { color:#6b7280; font-size:10px; line-height:1.4; }
+#main-content .stock-page-history .history-line-value strong { color:#475569; font-size:12px; font-weight:400; }
+#main-content .stock-page-history .history-line-value small { font-size:9px; }
+#main-content .stock-page-history .history-line-actions .btn { min-height:26px; padding:4px 6px; color:#374151; font-size:12px; font-weight:600; }
+#main-content .stock-page-history .history-dot { width:8px; height:8px; min-width:8px; background:#60a5fa; }
+#main-content .stock-page-history .history-dot.supplied { background:#10b981; }
+#main-content .stock-page-history .history-dot.unavailable { background:#ef4444; }
+#main-content .stock-page-history .history-summary { margin-top:28px; gap:12px; }
+#main-content .stock-page-history .history-summary .panel { padding:16px 6px; border-color:#e2e8f0; border-radius:16px; }
+#main-content .stock-page-history .history-summary h3 { margin-bottom:6px; color:#9ca3af; text-transform:uppercase; font-size:12px; font-weight:600; }
+#main-content .stock-page-history .history-summary small { color:#94a3b8; font-size:10px; }
+#main-content .stock-page-history .history-rate { margin:12px 0 4px; color:#1f2937; font-size:30px; font-weight:700; }
+#main-content .stock-page-history .history-summary p,
+#main-content .stock-page-history .history-summary dl { color:#6b7280; font-size:12px; }
+#main-content .stock-page-history .history-summary dl>div { padding:4px 0; }
+#main-content .stock-page-history .history-summary dd { color:#1f2937; font-weight:600; }
+#main-content .stock-page-history .supplier-spend { font-size:12px; }
+#main-content .stock-page-history .supplier-spend.phoenix i { background:#ea580c; }
+#main-content .stock-page-history .supplier-spend.aah i { background:#2563eb; }
+#main-content .stock-page-history .supplier-spend.alliance i { background:#7c3aed; }
+#main-content .stock-page-history .supplier-spend.bns i { background:#a16207; }
+#main-content .stock-page-history .supplier-spend.sigma i { background:#475569; }
+#main-content .stock-page-history .supplier-spend.trident i { background:#0f766e; }
+#main-content .stock-page-history .supplier-spend.warehouse i { background:#dc2626; }
+
+@media(min-width:1024px) and (max-width:1279px) {
+  #main-content .stock-page-manual .original-manual { grid-template-columns:minmax(0,1fr) 224px; }
+}
+@media(max-width:1180px) {
+  #main-content .stock-page-history .history-layout { grid-template-columns:minmax(0,1fr); gap:16px; }
+  #main-content .stock-page-history .history-summary { grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:0; }
+}
+@media(max-width:1023px) {
+  #main-content .stock-page-manual .original-manual { grid-template-columns:minmax(0,1fr); gap:12px; }
+  #main-content .stock-page-manual .concessions-sidebar { position:static; max-height:none; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
+  #main-content .stock-page-manual .workspace-products { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #main-content .stock-page-manual .workspace-products>h2,
+  #main-content .stock-page-manual .workspace-products>.concession-search,
+  #main-content .stock-page-manual .workspace-products>.concession-note { grid-column:1/-1; }
+  #main-content .stock-page-manual .workspace-product-entry { margin:0; }
+}
+@media(max-width:767px) {
+  #main-content { padding:16px 12px 36px; }
+  #main-content.view-manual { padding:4px 4px 100px; }
+  #main-content.view-goods,#main-content.view-analytics { padding-top:0; }
+  #main-content .stock-page-auto .auto-toolbar { flex-wrap:wrap; margin-top:0; gap:12px; }
+  #main-content .stock-page-auto .auto-toolbar>.tabs { width:100%; }
+  #main-content .stock-page-auto .auto-toolbar .tab { flex:1; min-height:40px; justify-content:center; }
+  #main-content .stock-page-auto .auto-toolbar .search-field { flex:1 1 100%; min-height:44px; }
+  #main-content .stock-page-auto .auto-toolbar .search-field input { min-height:42px; height:42px; font-size:16px!important; }
+  #main-content .stock-page-auto .auto-buttons { width:100%; gap:8px; }
+  #main-content .stock-page-auto .auto-buttons .btn { flex:1; min-height:44px; }
+  /* ProscriptOrdersListPage mobile contract: primary checkbox/product row,
+     then Not stocked, Owed, Pack, Shelf, Add and Dismiss in that order. */
+  #main-content .stock-page-auto .original-auto>.panel { border-radius:16px; }
+  #main-content .stock-page-auto .table-wrap { width:100%; min-width:0; overflow:visible; }
+  #main-content .stock-page-auto .data-table { display:block; width:100%; min-width:0; table-layout:auto; }
+  #main-content .stock-page-auto .data-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+  #main-content .stock-page-auto .data-table tbody { display:block; min-width:0; }
+  #main-content .stock-page-auto .data-table tbody tr { position:relative; display:grid; grid-template-columns:max-content max-content minmax(0,1fr) 64px max-content 24px; grid-template-rows:auto auto; align-items:center; gap:8px 2px; min-width:0; width:100%; padding:12px; border-bottom:1px solid #f3f4f6; white-space:normal; }
+  #main-content .stock-page-auto .data-table tbody tr:last-child { border-bottom:0; }
+  #main-content .stock-page-auto .data-table td { display:block; min-width:0; width:auto; height:auto; margin:0; padding:0; border:0; white-space:normal; }
+  #main-content .stock-page-auto .data-table td.check-cell { position:absolute; left:12px; top:14px; padding:0; width:16px; height:16px; }
+  #main-content .stock-page-auto .data-table td.check-cell input { width:16px; height:16px; margin:0; }
+  #main-content .stock-page-auto .data-table td:nth-child(2) { grid-column:1/-1; grid-row:1; padding-left:24px; min-height:20px; }
+  #main-content .stock-page-auto .data-table td:nth-child(2) .product-link { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; width:100%; color:#111827; font-size:14px; line-height:20px; font-weight:500; overflow-wrap:anywhere; }
+  #main-content .stock-page-auto .data-table td:nth-child(2)>.badge { margin:3px 0 0; font-size:10px; }
+  #main-content .stock-page-auto .data-table td:nth-child(3) { grid-column:1; grid-row:2; }
+  #main-content .stock-page-auto .data-table td:nth-child(5) { grid-column:2; grid-row:2; text-align:center; }
+  #main-content .stock-page-auto .data-table td:nth-child(4) { grid-column:3; grid-row:2; color:#4b5563; text-align:center; font-size:11px; line-height:16px; overflow-wrap:anywhere; }
+  #main-content .stock-page-auto .data-table td:nth-child(4)::before { content:"Pack "; font-weight:600; }
+  #main-content .stock-page-auto .data-table td:nth-child(6) { grid-column:4; grid-row:2; }
+  #main-content .stock-page-auto .data-table td:nth-child(7) { grid-column:5; grid-row:2; }
+  #main-content .stock-page-auto .data-table td:nth-child(8) { grid-column:6; grid-row:2; justify-self:end; }
+  #main-content .stock-page-auto .data-table td[colspan] { grid-column:1/-1; grid-row:auto; padding:0; }
+  #main-content .stock-page-auto .data-table td[colspan]::before { content:none; }
+  #main-content .stock-page-auto .badge.purple-outline { padding:4px 6px; color:#4338ca; border-color:#c7d2fe; border-radius:6px; font-size:11px; font-weight:600; line-height:16px; }
+  #main-content .stock-page-auto .badge.amber-outline { padding:2px 6px; color:#b45309; border-color:#fcd34d; border-radius:999px; font-size:11px; font-weight:700; line-height:16px; }
+  #main-content .stock-page-auto .data-table input[type=number] { width:64px; min-width:64px; min-height:44px; padding:4px 6px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; color:#111827; font-size:14px; font-weight:600; }
+  #main-content .stock-page-auto .data-table input[type=number]::placeholder { font-size:11px; font-weight:400; }
+  #main-content .stock-page-auto .data-table .btn-add { min-height:44px; padding:4px 10px; border:0; border-radius:8px; color:#fff; background:#059669; font-size:11px; font-weight:600; }
+  #main-content .stock-page-auto .data-table .btn-add:hover { background:#047857; }
+  #main-content .stock-page-auto .data-table .row-remove { display:flex; align-items:center; justify-content:center; width:24px; min-width:24px; height:44px; min-height:44px; padding:0; border:0; border-radius:6px; color:#d1d5db; background:transparent; font-size:18px; }
+  #main-content .stock-page-auto .data-table .row-remove:hover { color:#ef4444; background:#fef2f2; }
+  #main-content .stock-page-manual .manual-main .dmd-content { padding:12px 8px; }
+  #main-content .stock-page-manual .manual-main .dmd-query { min-height:48px; height:48px; font-size:16px; }
+  #main-content .stock-page-manual .manual-main .dmd-query::placeholder { font-size:14px; }
+  #main-content .stock-page-manual .manual-scan-input { min-height:44px; font-size:16px; }
+  #main-content .stock-page-manual .dmd-quick-add,
+  #main-content .stock-page-manual .manual-quick-basket .btn { min-height:44px; }
+  #main-content .stock-page-manual .workspace-products { gap:8px; padding:10px; }
+  #main-content .manual-continue { padding:8px 8px calc(8px + env(safe-area-inset-bottom)); gap:8px; }
+  #main-content .manual-continue .supplier-tag { padding:7px 8px; font-size:10px; }
+  #main-content .manual-continue .continue-button { min-height:48px; min-width:128px; padding:12px 16px; font-size:14px; }
+  #main-content .stock-page-goods,#main-content .stock-page-analytics { padding-left:0; padding-right:0; }
+  #main-content .stock-page-goods>.app-page-heading { grid-column:1/-1; padding-bottom:12px; }
+  #main-content .stock-page-goods>.goods-actions { grid-column:1/-1; grid-row:3; padding-bottom:20px; }
+  #main-content .stock-subnav { margin-left:-12px; margin-right:-12px; padding:0 12px; }
+  #main-content .stock-page-goods>.stock-subnav,#main-content .stock-page-analytics>.stock-subnav { margin-left:-12px; margin-right:-12px; }
+  #main-content .stock-subnav>.tabs button { min-height:44px; padding:10px 12px; }
+  #main-content .stock-page-goods .goods-actions .btn { min-height:44px; }
+  #main-content .stock-page-history .history-toolbar .tab { min-height:40px; font-size:12px; }
+  #main-content .stock-page-goods .stock-subnav>.tabs .tab { font-size:14px; }
+  #main-content .stock-page-history .history-filter input,
+  #main-content .stock-page-history .history-filter select,
+  #main-content .stock-page-history .history-result-filter select { min-height:44px; height:44px; font-size:16px; }
+  #main-content .stock-page-history .history-search .search-field { min-height:44px; height:44px; }
+  #main-content .stock-page-history .history-search input[type=search] { min-height:42px; height:42px; font-size:16px!important; }
+  #main-content .stock-page-history .history-filter-actions .btn,
+  #main-content .stock-page-history .history-order-actions .btn,
+  #main-content .stock-page-history .history-line-actions .btn { min-height:44px; height:auto; }
+  #main-content .stock-page-history .history-line { padding:10px 12px; }
+  #main-content .stock-page-history .history-summary { grid-template-columns:minmax(0,1fr); }
+}
+
+@media(max-width:359px) {
+  /* Preserve every action on narrow phones rather than make the page scroll. */
+  #main-content .stock-page-auto .data-table tbody tr { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px 24px; }
+  #main-content .stock-page-auto .data-table td:nth-child(2) { grid-column:1/-1; grid-row:1; }
+  #main-content .stock-page-auto .data-table td:nth-child(3) { grid-column:1; grid-row:2; }
+  #main-content .stock-page-auto .data-table td:nth-child(5) { grid-column:2; grid-row:2; }
+  #main-content .stock-page-auto .data-table td:nth-child(6) { grid-column:3; grid-row:2; }
+  #main-content .stock-page-auto .data-table td:nth-child(8) { grid-column:4; grid-row:2; }
+  #main-content .stock-page-auto .data-table td:nth-child(4) { grid-column:1; grid-row:3; text-align:left; }
+  #main-content .stock-page-auto .data-table td:nth-child(7) { grid-column:2/4; grid-row:3; justify-self:end; }
+}
+
+/* Match the original gray dark surfaces while preserving the same state colors. */
+.dark #main-content .stock-page-auto .auto-toolbar>.tabs { background:#374151; }
+.dark #main-content .stock-page-auto .auto-toolbar .tab.active { color:#c4b5fd; background:#1f2937; }
+.dark #main-content .stock-page-auto .data-table tbody tr:nth-child(odd),
+.dark #main-content .stock-page-history .history-line:nth-child(odd) { background:#1f2937; }
+.dark #main-content .stock-page-auto .data-table tbody tr:nth-child(even),
+.dark #main-content .stock-page-history .history-line:nth-child(even) { background:#111827; }
+.dark #main-content .stock-page-auto .data-table tbody tr:hover { background:#374151; }
+.dark #main-content .stock-page-auto .data-table th { background:#1f293780; color:#9ca3af; }
+.dark #main-content .stock-page-auto .data-table .product-link,
+.dark #main-content .stock-page-manual .workspace-product-name,
+.dark #main-content .stock-page-manual .concessions-sidebar h2,
+.dark #main-content .stock-page-manual .manual-scan-heading label,
+.dark #main-content .stock-page-manual .dmd-option strong,
+.dark #main-content .stock-metric>strong,
+.dark #main-content .stock-page-history .history-product strong { color:#e5e7eb; }
+.dark #main-content .stock-page-manual .manual-main .manual-dmd,
+.dark #main-content .stock-page-manual .manual-main .dmd-content,
+.dark #main-content .stock-page-manual .concessions-sidebar,
+.dark #main-content .stock-page-manual .dmd-popover,
+.dark #main-content .stock-subnav,
+.dark #main-content .stock-page-history .history-controls,
+.dark #main-content .stock-page-history .history-order,
+.dark #main-content .stock-page-history .history-fulfilment,
+.dark #main-content .stock-page-history .history-summary .panel,
+.dark #main-content .stock-page-goods .needs-receipt,
+.dark #main-content .stock-page-goods .delivery-overview-card,
+.dark #main-content .stock-page-goods .delivery-order-card { background:#1f2937; border-color:#374151; }
+.dark #main-content .stock-page-manual .manual-main .dmd-query,
+.dark #main-content .stock-page-manual .dmd-source-select,
+.dark #main-content .stock-page-manual .manual-scan-panel,
+.dark #main-content .stock-page-manual .manual-scan-input,
+.dark #main-content .stock-page-history .history-order-head,
+.dark #main-content .stock-page-history .history-filter input,
+.dark #main-content .stock-page-history .history-filter select,
+.dark #main-content .stock-page-history .history-result-filter select,
+.dark #main-content .stock-page-history .history-search .search-field { background:#374151; border-color:#4b5563; color:#e5e7eb; }
+.dark #main-content .stock-page-manual .workspace-product-entry { background:#78350f33; border-color:#92400e; }
+.dark #main-content .stock-page-manual .workspace-product-entry>.concession-card:hover { background:#78350f66; }
+.dark #main-content .stock-page-manual .dmd-quick-add,
+.dark #main-content .stock-page-manual .manual-quick-basket .btn { color:#fff; background:#10b981; border-color:#10b981; }
+.dark #main-content .stock-page-manual .dmd-quick-add:hover,
+.dark #main-content .stock-page-manual .manual-quick-basket .btn:hover { color:#fff; background:#059669; border-color:#059669; }
+.dark #main-content .stock-page-auto .data-table td:nth-child(2) .product-link { color:#e5e7eb; }
+.dark #main-content .stock-page-history .history-toolbar .tab { background:#374151; color:#d1d5db; }
+.dark #main-content .stock-page-history .history-toolbar .tab.active { background:#7c3aed; color:#fff; }
+.dark #main-content .stock-page-history .history-order-total>strong,
+.dark #main-content .stock-page-history .history-order-reference strong,
+.dark #main-content .stock-page-history .history-line-value strong,
+.dark #main-content .stock-page-history .history-summary dd,
+.dark #main-content .stock-page-history .history-rate,
+.dark #main-content .stock-page-goods .delivery-overview-card>strong,
+.dark #main-content .stock-page-goods .needs-receipt>summary,
+.dark #main-content .stock-page-goods>.app-page-heading h1 { color:#e5e7eb; }
+.dark #main-content .manual-continue { background:#1f2937; border-color:#374151; }
+.dark #main-content .manual-continue .manual-total strong { color:#e5e7eb; }

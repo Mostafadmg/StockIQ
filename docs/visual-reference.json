@@ -1,0 +1,888 @@
+{
+  "inspectedAt": "2026-11-11",
+  "method": "Read-only HTTP GET of currently deployed static frontend assets; previous read-only authenticated captures used as explicitly marked geometry evidence. No original mutation endpoint invoked.",
+  "limits": [
+    "No shared browser control tool was available; current authenticated visual comparison was not performed.",
+    "Utility classes and exact CSS values verify styles, but account data, live server settings and responsive visual equivalence remain unverified.",
+    "Older captured Phoenix supplier colour #f97316 is superseded by current source #ea580c."
+  ],
+  "assets": [
+    {
+      "url": "/assets/AnalyticsDashboardPage-Bw-XfZCK.js",
+      "sha256": "0000fd1bb06e61be1ad4fa2cae86584960cf4a59556bb0a9b35b3d6b674dc612",
+      "bytes": 18173
+    },
+    {
+      "url": "/assets/ClaimsPage-DK23Qfko.js",
+      "sha256": "4e000d1758276208b2b8cad5c2ffd2ef8cb3b510ddda54544e75df48aa84d6fa",
+      "bytes": 18506
+    },
+    {
+      "url": "/assets/FastLinesConfigPage-CFeyeh1d.js",
+      "sha256": "75731a9133de22682e537a69a3765b9299f06b83469d3b71fb15e11f83ff7b88",
+      "bytes": 14667
+    },
+    {
+      "url": "/assets/GoodsInEntry-VV7wimYO.js",
+      "sha256": "ef0bd66631aecd0851f0959fef4d188131bda2658f1e46e0c2209ba56e121e89",
+      "bytes": 8292
+    },
+    {
+      "url": "/assets/GoodsInQueuePage-Djw01lDB.js",
+      "sha256": "3919d42518a85361c3d311e603f8684c5d29246fe2469bd510d760dff51bec3b",
+      "bytes": 82522
+    },
+    {
+      "url": "/assets/GoodsInTabs-BMotQw0U.js",
+      "sha256": "f985bf262340e6a67cc457f7727c23b7fc7d150bb6cefd87d2a4dae8fe154036",
+      "bytes": 1559
+    },
+    {
+      "url": "/assets/MiscOrdersPage-BNxfLXMn.js",
+      "sha256": "6cae04a72f5cd5039c82ced0e354554bb01a87462edf58608e2e483cac9ce679",
+      "bytes": 69849
+    },
+    {
+      "url": "/assets/OrderReviewPage-Wv9P_iBN.js",
+      "sha256": "7c844a2bd2c8baf51d5f67147097c83f3af430388728b2a2c863b4cf88621e20",
+      "bytes": 204792
+    },
+    {
+      "url": "/assets/OrderingModule-DPiJNZxr.css",
+      "sha256": "cffbdcaadd69405b68037acaeb97ee661b95df51a99c20b405960cc663d74019",
+      "bytes": 6615
+    },
+    {
+      "url": "/assets/OrderingModule-hJBdQR3w.js",
+      "sha256": "34dc1973c2327682febdb95393f1b08fc93bfbdb7c1a127c94a75f63a5b9ed21",
+      "bytes": 235851
+    },
+    {
+      "url": "/assets/StockWorkspacePage-BlLq5rlV.js",
+      "sha256": "256ea943ebcdf8ae1641f3e32a8c058fec73e667193549b18a9fa6c548b5e73e",
+      "bytes": 40292
+    },
+    {
+      "url": "/assets/SupplierDeliveryTimesPage-BImrUc2K.js",
+      "sha256": "02d4e3c85e2bdf58738753766ec5a144644e4c6b141b74c3f5ff5f7f1dd8283b",
+      "bytes": 6450
+    },
+    {
+      "url": "/assets/index-CFLJ4AAG.css",
+      "sha256": "c88b5ffe8fdfece4bbe91189ee4b934dbdd639b79c47019ba85f8e654e5e8825",
+      "bytes": 133083
+    },
+    {
+      "url": "/assets/index-Dw5KynY3.js",
+      "sha256": "b71cb25cfe2219181f0d1288fc7571068bc8d6a8925e1cce821403455f6b490e",
+      "bytes": 225668
+    },
+    {
+      "url": "/assets/receiving-ChF3xR87.css",
+      "sha256": "7edd90a43396911dc9585ffad36bc4941d4d6f66abf3285f5575454944231f6c",
+      "bytes": 29711
+    },
+    {
+      "url": "/assets/vendor-BDbrw1j7.js",
+      "sha256": "a55a9ff1d4eb03d29332861d7410fea9653288000f83025bcadbafadc8eec934",
+      "bytes": 160753
+    },
+    {
+      "url": "/assets/ProscriptOrdersListPage-D1TsY_5S.js",
+      "sha256": "814979702f19a31d877b3b4466e5d33a434b8013cc1719cd90610ca2b102a7fa",
+      "bytes": 124516
+    }
+  ],
+  "palette": {
+    "gray-50": "#f9fafb",
+    "gray-100": "#f3f4f6",
+    "gray-200": "#e5e7eb",
+    "gray-300": "#d1d5db",
+    "gray-400": "#9ca3af",
+    "gray-500": "#6b7280",
+    "gray-600": "#4b5563",
+    "gray-700": "#374151",
+    "gray-800": "#1f2937",
+    "gray-900": "#111827",
+    "slate-50": "#f8fafc",
+    "slate-100": "#f1f5f9",
+    "slate-200": "#e2e8f0",
+    "slate-300": "#cbd5e1",
+    "slate-400": "#94a3b8",
+    "slate-500": "#64748b",
+    "slate-600": "#475569",
+    "slate-700": "#334155",
+    "slate-800": "#1e293b",
+    "slate-900": "#0f172a",
+    "violet-50": "#f5f3ff",
+    "violet-100": "#ede9fe",
+    "violet-200": "#ddd6fe",
+    "violet-500": "#8b5cf6",
+    "violet-600": "#7c3aed",
+    "violet-700": "#6d28d9",
+    "violet-800": "#5b21b6",
+    "violet-900": "#4c1d95",
+    "purple-50": "#faf5ff",
+    "purple-100": "#f3e8ff",
+    "purple-200": "#e9d5ff",
+    "purple-500": "#a855f7",
+    "purple-600": "#9333ea",
+    "purple-700": "#7e22ce",
+    "purple-900": "#581c87",
+    "emerald-50": "#ecfdf5",
+    "emerald-100": "#d1fae5",
+    "emerald-200": "#a7f3d0",
+    "emerald-300": "#6ee7b7",
+    "emerald-400": "#34d399",
+    "emerald-500": "#10b981",
+    "emerald-600": "#059669",
+    "emerald-700": "#047857",
+    "emerald-800": "#065f46",
+    "emerald-900": "#064e3b",
+    "amber-50": "#fffbeb",
+    "amber-100": "#fef3c7",
+    "amber-200": "#fde68a",
+    "amber-300": "#fcd34d",
+    "amber-400": "#fbbf24",
+    "amber-500": "#f59e0b",
+    "amber-600": "#d97706",
+    "amber-700": "#b45309",
+    "amber-800": "#92400e",
+    "amber-900": "#78350f",
+    "orange-50": "#fff7ed",
+    "orange-100": "#ffedd5",
+    "orange-200": "#fed7aa",
+    "orange-500": "#f97316",
+    "orange-600": "#ea580c",
+    "orange-700": "#c2410c",
+    "orange-800": "#9a3412",
+    "orange-900": "#7c2d12",
+    "blue-50": "#eff6ff",
+    "blue-100": "#dbeafe",
+    "blue-200": "#bfdbfe",
+    "blue-400": "#60a5fa",
+    "blue-500": "#3b82f6",
+    "blue-600": "#2563eb",
+    "blue-700": "#1d4ed8",
+    "blue-800": "#1e40af",
+    "blue-900": "#1e3a8a",
+    "red-50": "#fef2f2",
+    "red-100": "#fee2e2",
+    "red-200": "#fecaca",
+    "red-300": "#fca5a5",
+    "red-400": "#f87171",
+    "red-500": "#ef4444",
+    "red-600": "#dc2626",
+    "red-700": "#b91c1c",
+    "red-800": "#991b1b",
+    "red-900": "#7f1d1d",
+    "teal-50": "#f0fdfa",
+    "teal-100": "#ccfbf1",
+    "teal-200": "#99f6e4",
+    "teal-500": "#14b8a6",
+    "teal-600": "#0d9488",
+    "teal-700": "#0f766e",
+    "indigo-50": "#eef2ff",
+    "indigo-100": "#e0e7ff",
+    "indigo-200": "#c7d2fe",
+    "indigo-300": "#a5b4fc",
+    "indigo-500": "#6366f1",
+    "indigo-600": "#4f46e5",
+    "indigo-700": "#4338ca",
+    "indigo-800": "#3730a3",
+    "sky-50": "#f0f9ff",
+    "sky-100": "#e0f2fe",
+    "sky-200": "#bae6fd",
+    "sky-300": "#7dd3fc",
+    "sky-400": "#38bdf8",
+    "sky-500": "#0ea5e9",
+    "sky-600": "#0284c7",
+    "sky-700": "#0369a1",
+    "sky-800": "#075985",
+    "sky-900": "#0c4a6e",
+    "green-50": "#f0fdf4",
+    "green-100": "#dcfce7",
+    "green-200": "#bbf7d0",
+    "green-600": "#16a34a",
+    "green-700": "#15803d",
+    "green-800": "#166534",
+    "yellow-50": "#fefce8",
+    "yellow-400": "#facc15",
+    "yellow-500": "#eab308",
+    "yellow-700": "#a16207"
+  },
+  "suppliers": {
+    "warehouse": {
+      "solid": "#dc2626",
+      "tint": {
+        "bg": "bg-red-50",
+        "border": "border-red-200",
+        "text": "text-red-700",
+        "badge": "bg-red-100",
+        "dot": "bg-red-500"
+      }
+    },
+    "aah": {
+      "solid": "#2563eb",
+      "tint": {
+        "bg": "bg-blue-50",
+        "border": "border-blue-200",
+        "text": "text-blue-700",
+        "badge": "bg-blue-100",
+        "dot": "bg-blue-500"
+      }
+    },
+    "alliance": {
+      "solid": "#7c3aed",
+      "tint": {
+        "bg": "bg-violet-50",
+        "border": "border-violet-200",
+        "text": "text-violet-700",
+        "badge": "bg-violet-100",
+        "dot": "bg-violet-500"
+      }
+    },
+    "phoenix": {
+      "solid": "#ea580c",
+      "tint": {
+        "bg": "bg-orange-50",
+        "border": "border-orange-200",
+        "text": "text-orange-700",
+        "badge": "bg-orange-100",
+        "dot": "bg-orange-500"
+      }
+    },
+    "medihealth": {
+      "solid": "#0d9488",
+      "tint": {
+        "bg": "bg-teal-50",
+        "border": "border-teal-200",
+        "text": "text-teal-700",
+        "badge": "bg-teal-100",
+        "dot": "bg-teal-500"
+      }
+    },
+    "otc": {
+      "solid": "#0369a1",
+      "tint": {
+        "bg": "bg-sky-50",
+        "border": "border-sky-200",
+        "text": "text-sky-700",
+        "badge": "bg-sky-100",
+        "dot": "bg-sky-500"
+      }
+    },
+    "trident": {
+      "solid": "#0f766e",
+      "tint": {
+        "bg": "bg-teal-50",
+        "border": "border-teal-200",
+        "text": "text-teal-700",
+        "badge": "bg-teal-100",
+        "dot": "bg-teal-500"
+      }
+    },
+    "sigma": {
+      "solid": "#475569",
+      "tint": {
+        "bg": "bg-slate-50",
+        "border": "border-slate-200",
+        "text": "text-slate-700",
+        "badge": "bg-slate-100",
+        "dot": "bg-slate-500"
+      }
+    },
+    "bns": {
+      "solid": "#a16207",
+      "tint": {
+        "bg": "bg-amber-50",
+        "border": "border-amber-200",
+        "text": "text-amber-700",
+        "badge": "bg-amber-100",
+        "dot": "bg-amber-500"
+      }
+    },
+    "bestway": {
+      "solid": "#d97706",
+      "tint": {
+        "bg": "bg-amber-50",
+        "border": "border-amber-200",
+        "text": "text-amber-700",
+        "badge": "bg-amber-100",
+        "dot": "bg-amber-500"
+      }
+    },
+    "ethigen": {
+      "solid": "#0891b2",
+      "tint": {
+        "bg": "bg-cyan-50",
+        "border": "border-cyan-200",
+        "text": "text-cyan-700",
+        "badge": "bg-cyan-100",
+        "dot": "bg-cyan-500"
+      }
+    },
+    "bs": {
+      "solid": "#475569",
+      "tint": {
+        "bg": "bg-slate-50",
+        "border": "border-slate-200",
+        "text": "text-slate-700",
+        "badge": "bg-slate-100",
+        "dot": "bg-slate-500"
+      }
+    },
+    "medhub": {
+      "solid": "#65a30d",
+      "tint": {
+        "bg": "bg-lime-50",
+        "border": "border-lime-200",
+        "text": "text-lime-700",
+        "badge": "bg-lime-100",
+        "dot": "bg-lime-500"
+      }
+    },
+    "pmr": {
+      "solid": "#0284c7",
+      "tint": {
+        "bg": "bg-sky-50",
+        "border": "border-sky-200",
+        "text": "text-sky-700",
+        "badge": "bg-sky-100",
+        "dot": "bg-sky-500"
+      }
+    },
+    "colorama": {
+      "solid": "#db2777",
+      "tint": {
+        "bg": "bg-pink-50",
+        "border": "border-pink-200",
+        "text": "text-pink-700",
+        "badge": "bg-pink-100",
+        "dot": "bg-pink-500"
+      }
+    },
+    "numark": {
+      "solid": "#0d9488",
+      "tint": {
+        "bg": "bg-teal-50",
+        "border": "border-teal-200",
+        "text": "text-teal-700",
+        "badge": "bg-teal-100",
+        "dot": "bg-teal-500"
+      }
+    },
+    "lexon": {
+      "solid": "#9333ea",
+      "tint": {
+        "bg": "bg-purple-50",
+        "border": "border-purple-200",
+        "text": "text-purple-700",
+        "badge": "bg-purple-100",
+        "dot": "bg-purple-500"
+      }
+    },
+    "fallback": {
+      "solid": "#64748b",
+      "tint": {
+        "bg": "bg-slate-50",
+        "border": "border-slate-200",
+        "text": "text-slate-700",
+        "badge": "bg-slate-100",
+        "dot": "bg-slate-500"
+      }
+    }
+  },
+  "shared": {
+    "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "rootFontPx": 16,
+    "bodyText": "gray-900",
+    "rootGradient": [
+      "slate-50",
+      "slate-100"
+    ],
+    "nav": {
+      "radiusPx": 8,
+      "activeBackground": "violet-50",
+      "activeText": "violet-700",
+      "inactiveText": "gray-600",
+      "hoverBackground": "gray-100",
+      "hoverText": "gray-900",
+      "padding": "8px 8px; XL 8px 12px",
+      "fontPx": {
+        "normal": 14,
+        "XL": 16
+      },
+      "fontWeight": 600
+    },
+    "header": {
+      "background": "white / 90%; mobile white",
+      "borderBottom": "2px gray-200",
+      "position": "sticky top0",
+      "shadow": "shadow-sm",
+      "desktopPadding": "6px 20px",
+      "mobilePadding": "16px 8px +safearea top",
+      "desktopDerivedHeightPx": 54,
+      "mobileDerivedHeightPx": 70,
+      "smDerivedHeightPx": 78,
+      "logoBackground": "#0E1320",
+      "logoSize": {
+        "mobile": 36,
+        "sm": 44,
+        "md": 40
+      },
+      "logoRadiusPx": 12,
+      "logoImagePx": 28
+    },
+    "radiiPx": {
+      "rounded": 4,
+      "lg": 8,
+      "xl": 12,
+      "2xl": 16,
+      "full": "9999px"
+    },
+    "card": {
+      "autoRadiusPx": 16,
+      "autoBorder": "gray-100",
+      "ordinaryRadiusPx": 12,
+      "ordinaryBorder": "gray-200",
+      "background": "white",
+      "shadow": "shadow-sm"
+    },
+    "form": {
+      "radiusPx": 8,
+      "border": "gray-200 or gray-300 by context",
+      "focus": "emerald-500 or violet-500 by context"
+    }
+  },
+  "controls": {
+    "autoAddSelected": {
+      "bg": "emerald-600",
+      "text": "white",
+      "radiusPx": 8
+    },
+    "manualQuickAdd": {
+      "bg": "emerald-500",
+      "hover": "emerald-600",
+      "text": "white",
+      "radiusPx": 8
+    },
+    "manualConfirmAdd": {
+      "bg": "violet-600",
+      "hover": "violet-700",
+      "text": "white",
+      "radiusPx": 12,
+      "minHeightPx": 44
+    },
+    "manualContinue": {
+      "gradient": [
+        "blue-600",
+        "blue-700"
+      ],
+      "text": "white",
+      "radiusPx": 12,
+      "padding": "12px 24px",
+      "shadow": "shadow-lg; hover shadow-xl"
+    },
+    "goodsTab": {
+      "activeTextBorder": "indigo-600",
+      "inactiveText": "gray-500",
+      "radiusPx": 0,
+      "borderBottomPx": 2,
+      "padding": "10px 12px",
+      "fontPx": 14,
+      "weight": 600
+    },
+    "historyTab": {
+      "activeBg": "violet-600",
+      "activeText": "white",
+      "inactiveBg": "gray-100",
+      "inactiveText": "gray-600",
+      "hoverBg": "gray-200",
+      "radius": "full",
+      "padding": "6px 10px",
+      "fontPx": 12,
+      "weight": 600
+    },
+    "basketSupplier": {
+      "shape": "rounded-full capsule",
+      "desktopHeightPx": 20,
+      "mobileHeightPx": 28,
+      "style": "Supplier tint background and supplier text, not solid brand fill",
+      "tints": {
+        "Phoenix": [
+          "#ffedd5",
+          "#c2410c"
+        ],
+        "AAH": [
+          "#dbeafe",
+          "#1d4ed8"
+        ],
+        "Alliance": [
+          "#ede9fe",
+          "#6d28d9"
+        ],
+        "BNS": [
+          "#fef3c7",
+          "#b45309"
+        ],
+        "Trident": [
+          "#ccfbf1",
+          "#0f766e"
+        ],
+        "Sigma": [
+          "#f1f5f9",
+          "#334155"
+        ],
+        "Warehouse": [
+          "#fee2e2",
+          "#b91c1c"
+        ]
+      },
+      "alternativeRows": "Neutral names and backgrounds; indigo50 selected row, emerald700 selected price"
+    }
+  },
+  "statusBadges": {
+    "accepted": [
+      "emerald-100",
+      "emerald-700"
+    ],
+    "submitted": [
+      "emerald-100",
+      "emerald-700"
+    ],
+    "failed": [
+      "red-100",
+      "red-700"
+    ],
+    "rejected": [
+      "red-100",
+      "red-700"
+    ],
+    "partial": [
+      "amber-100",
+      "amber-700"
+    ],
+    "submitting": [
+      "amber-100",
+      "amber-700"
+    ],
+    "pending": [
+      "gray-100",
+      "gray-600"
+    ],
+    "unknown": [
+      "gray-100",
+      "gray-600"
+    ],
+    "changed": [
+      "blue-100",
+      "blue-700"
+    ],
+    "unresolved": [
+      "blue-100",
+      "blue-700"
+    ],
+    "toFollow": [
+      "orange-100",
+      "orange-700"
+    ]
+  },
+  "history": {
+    "toolbar": "white, bordergray200, radius12, padding10px/mobile and4pxhorizontal/desktop, gap6px/mobile4pxdesktop",
+    "lineTextPx": 12,
+    "lineHeightPx": 16,
+    "supplierHeaderTag": {
+      "radiusPx": 4,
+      "fontPx": 10,
+      "weight": 700,
+      "padding": "2px 6px",
+      "text": "white",
+      "bg": "supplier solid"
+    },
+    "tinyLineSourceTag": {
+      "radiusPx": 4,
+      "fontPx": 9,
+      "weight": 700,
+      "padding": "0px 4px",
+      "lineHeightPx": 16,
+      "text": "white",
+      "bg": "supplier solid"
+    },
+    "desktopMainGutterPx": 4
+  },
+  "manual": {
+    "search": "gray100 background,radius12,padding12px16px/left44px,text16mobile14sm,border0,blue500focusring",
+    "sidebar": "white borderleftgray200 width320px/lg224px/xl320px,top60pxsticky,heightviewport-60,padding12px/desktophorizontal4px",
+    "concessionCard": "amber50 background,amber200 border,radius8,padding8px/desktophorizontal4px,text12pxgray900,metadata12pxgray500",
+    "supplierLabel": "supplier solid bg,white text10/11pxbold,roundedfull",
+    "footerSupplier": "supplier solid bg,white text,padding8px12px,radius8"
+  },
+  "capturedGeometrySource": {
+    "file": "stockiq-style-reference.json",
+    "capturedHtmlZoom": 1.1875,
+    "note": "Use CSS values rather than boundingrect zoomed pixel measurements."
+  },
+  "basketReview": {
+    "supplierPicker": {
+      "kind": "supplier tint badge + tint text",
+      "desktop": {
+        "heightPx": 20,
+        "minWidthPx": 60,
+        "fontPx": 12,
+        "weight": 600,
+        "paddingHorizontalPx": 8,
+        "radius": "full"
+      },
+      "mobile": {
+        "heightPx": 28,
+        "widthPx": 56,
+        "fontPx": 10,
+        "weight": 600,
+        "paddingHorizontalPx": 4,
+        "radius": "full"
+      }
+    },
+    "tintedSupplierPalette": {
+      "warehouse": {
+        "background": "#fee2e2",
+        "text": "#b91c1c"
+      },
+      "aah": {
+        "background": "#dbeafe",
+        "text": "#1d4ed8"
+      },
+      "alliance": {
+        "background": "#ede9fe",
+        "text": "#6d28d9"
+      },
+      "phoenix": {
+        "background": "#ffedd5",
+        "text": "#c2410c"
+      },
+      "medihealth": {
+        "background": "#ccfbf1",
+        "text": "#0f766e"
+      },
+      "otc": {
+        "background": "#e0f2fe",
+        "text": "#0369a1"
+      },
+      "trident": {
+        "background": "#ccfbf1",
+        "text": "#0f766e"
+      },
+      "sigma": {
+        "background": "#f1f5f9",
+        "text": "#334155"
+      },
+      "bns": {
+        "background": "#fef3c7",
+        "text": "#b45309"
+      },
+      "bestway": {
+        "background": "#fef3c7",
+        "text": "#b45309"
+      },
+      "ethigen": {
+        "background": null,
+        "text": null
+      },
+      "bs": {
+        "background": "#f1f5f9",
+        "text": "#334155"
+      },
+      "medhub": {
+        "background": null,
+        "text": null
+      },
+      "pmr": {
+        "background": "#e0f2fe",
+        "text": "#0369a1"
+      },
+      "colorama": {
+        "background": null,
+        "text": null
+      },
+      "numark": {
+        "background": "#ccfbf1",
+        "text": "#0f766e"
+      },
+      "lexon": {
+        "background": "#f3e8ff",
+        "text": "#7e22ce"
+      },
+      "fallback": {
+        "background": "#f1f5f9",
+        "text": "#334155"
+      }
+    },
+    "alternativeMenu": {
+      "background": "white",
+      "hoverBackground": "slate-50",
+      "selectedBackground": "indigo-50",
+      "supplierName": "11px bold slate-900",
+      "selectedPrice": "emerald-700",
+      "normalPrice": "slate-900",
+      "availableText": "emerald-600",
+      "unavailableText": "rose-600",
+      "rowHeightPx": 36,
+      "mobileRowHeightPx": 44,
+      "horizontalPaddingPx": 12,
+      "verticalPaddingPx": 4
+    },
+    "alternativePopover": {
+      "widthPx": 208,
+      "radiusPx": 8,
+      "border": "slate-200",
+      "shadow": "shadow-xl"
+    },
+    "expandedOfferChips": {
+      "kind": "supplier tint badge + text",
+      "fontPx": 12,
+      "weight": 700,
+      "padding": "6px 12px",
+      "radiusPx": 8,
+      "selectedRing": "2px emerald-400 with1px offset",
+      "inactiveOpacity": 0.6
+    },
+    "submitSupplierButton": {
+      "background": "indigo-600",
+      "text": "white",
+      "heightPx": 32,
+      "radiusPx": 8,
+      "fontPx": 10,
+      "weight": 700
+    }
+  },
+  "analytics": {
+    "standaloneContentHeading": false,
+    "sharedHeaderTitle": "Intelligence & Analytics",
+    "compactDesktopHeader": true,
+    "background": "#f9fafb",
+    "toolbar": {
+      "background": "white",
+      "borderBottom": "1px gray-200",
+      "fontPx": 13,
+      "padding": "12px 14px",
+      "activeColor": "#7c3aed",
+      "activeWeight": 700,
+      "inactiveColor": "#6b7280",
+      "inactiveWeight": 400,
+      "activeBorderBottom": "2px #7c3aed"
+    },
+    "darkPalette": "No explicit current source override was found; preserving readable dark mode is not a claim of literal dark-theme equivalence."
+  },
+  "autoMobile": {
+    "breakpointPx": 768,
+    "method": "Fresh current ProscriptOrdersListPage source, verified against captured truncated mainHTML first row.",
+    "outer": {
+      "display": "flex column; md grid",
+      "padding": "12px 12px; md6px4px",
+      "gapPx": 8,
+      "desktopGapPx": 4,
+      "minWidth": "0; md620px normal,560pxFast",
+      "whiteSpace": "normal; mdnowrap",
+      "alternatingBackgrounds": [
+        "gray-50",
+        "white"
+      ],
+      "selectedBackground": "emerald-50"
+    },
+    "columnHeader": "hidden below768px; mdgrid",
+    "primaryRow": {
+      "display": "flex nowrap; mdcontents",
+      "gapPx": 8,
+      "checkboxPx": 16,
+      "product": {
+        "fontPx": 14,
+        "weight": 500,
+        "color": "gray-900",
+        "lineClamp": 2,
+        "wordBreak": "break-words"
+      }
+    },
+    "secondaryRow": {
+      "display": "flex nowrap; mdcontents",
+      "gapPx": 2,
+      "order": [
+        "Not stocked",
+        "Owed",
+        "Pack",
+        "On shelf",
+        "Add",
+        "Dismiss"
+      ]
+    },
+    "controls": {
+      "notStocked": {
+        "fontPx": 11,
+        "weight": 600,
+        "padding": "4px6px",
+        "radiusPx": 6,
+        "background": "white",
+        "text": "indigo-700",
+        "border": "indigo-200"
+      },
+      "owed": {
+        "fontPx": 11,
+        "weight": 700,
+        "padding": "2px6px",
+        "radius": "full",
+        "on": "amber-500/white",
+        "off": "white/amber-700 borderamber-300"
+      },
+      "pack": {
+        "fontPx": 11,
+        "color": "gray-600",
+        "mobilePrefix": "Pack ",
+        "prefixWeight": 600
+      },
+      "shelf": {
+        "widthPx": 64,
+        "fontPx": 14,
+        "weight": 600,
+        "padding": "4px6px",
+        "radiusPx": 8,
+        "border": "gray-200",
+        "background": "white",
+        "placeholder": "On shelf",
+        "placeholderFontPx": 11
+      },
+      "add": {
+        "fontPx": 11,
+        "weight": 600,
+        "padding": "4px10px",
+        "radiusPx": 8,
+        "background": "emerald-600",
+        "hoverBackground": "emerald-700",
+        "text": "white",
+        "disabledOpacity": 0.4
+      },
+      "dismiss": {
+        "widthPx": 24,
+        "heightPx": 24,
+        "radiusPx": 6,
+        "color": "gray-300",
+        "hoverColor": "red-500",
+        "hoverBackground": "red-50",
+        "marginLeft": "auto"
+      }
+    },
+    "fastLinesVariant": {
+      "order": [
+        "Target / cover days",
+        "Pack",
+        "On shelf",
+        "Add",
+        "Dismiss"
+      ],
+      "owedRendered": false,
+      "notStockedRendered": false
+    },
+    "limits": [
+      "This contract is the standard responsive Orders/Fast Lines row branch. Unobserved account-specific pending/warehouse states were not invented."
+    ]
+  },
+  "sourceContext": "Asset paths refer to the owner\u2019s original StockIQ website; this file is evidence only, not a runtime upstream configuration."
+}

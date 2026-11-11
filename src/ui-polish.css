@@ -396,7 +396,7 @@ body.dark { --bg:#141c28; --surface:#1d2837; --ink:#e3eaf3; --muted:#a5b3c5; --l
   #main-content input:not([type=checkbox]):not([type=radio]),#main-content select,#main-content textarea,.modal input,.modal select,.modal textarea,.manual-order-dialog input,.manual-order-dialog select,.manual-order-dialog textarea,.login-card input { font-size:16px!important; min-height:44px; line-height:1.35; }
   #main-content input[type=search]::placeholder { font-size:14px; }
   #main-content input[type=date],#main-content input[type=time] { max-width:100%; min-width:0; }
-  .tabs .tab,.tabs button,.stock-subnav>.tabs button { font-size:13px!important; min-height:42px; padding:10px 12px!important; }
+  .tabs .tab,.tabs button,.stock-subnav>.tabs button { font-size:13px; min-height:42px; padding:10px 12px; }
   .tabs .count { font-size:10px; }
   .stock-subnav { min-height:48px; margin-bottom:16px; }
   #main-content .stock-titlebar { gap:10px; margin-bottom:16px!important; flex-wrap:wrap; align-items:center!important; }
