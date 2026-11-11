@@ -346,8 +346,19 @@
 #main-content .stock-page-manual .manual-items-error { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px 16px; }
 #main-content .stock-page-manual .manual-items-error>span { flex:1 1 220px; }
 #main-content .stock-page-manual .manual-items-error>.btn { flex:none; min-height:38px; margin:0; padding:8px 12px; font-size:12px; }
-#main-content .stock-page-manual .manual-basket-supplier { display:block; width:100%; max-width:170px; margin:0; }
-#main-content .stock-page-manual .manual-basket-supplier select { width:100%; min-height:38px; margin:0; padding:8px 28px 8px 10px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:8px; font-size:12px; line-height:1.4; }
+#main-content .stock-page-manual .manual-basket-selection { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 16px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; }
+#main-content .stock-page-manual .manual-basket-select-all { display:inline-flex; align-items:center; gap:7px; min-height:38px; margin:0; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:12px; }
+#main-content .stock-page-manual .manual-basket-select-all[aria-pressed=true],#main-content .stock-page-manual .manual-basket-select-all[aria-pressed=mixed] { color:var(--purple); background:var(--purple-bg); border-color:#c4b5fd; }
+#main-content .stock-page-manual .manual-basket-product { display:flex; align-items:center; gap:8px; min-width:0; }
+#main-content .stock-page-manual .manual-basket-select { display:flex; flex:none; align-items:center; justify-content:center; width:30px; min-height:38px; margin:0; cursor:pointer; }
+#main-content .stock-page-manual .manual-basket-select input { flex:none; width:17px; height:17px; min-height:0; margin:0; padding:0; accent-color:var(--purple); }
+#main-content .stock-page-manual .manual-item-medicine { min-width:0; }
+#main-content .stock-page-manual .manual-added-medicines tr.is-selected { background:var(--purple-bg); }
+#main-content .stock-page-manual .manual-basket-supplier { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; max-width:180px; min-height:38px; margin:0; padding:7px 9px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:8px; font-size:12px; line-height:1.4; text-align:left; }
+#main-content .stock-page-manual .manual-basket-supplier:hover { border-color:#c4b5fd; background:var(--shade); }
+#main-content .stock-page-manual .manual-basket-supplier-change { flex:none; color:var(--muted); font-size:10px; }
+#main-content .stock-page-manual .manual-basket-supplier .supplier-tag { min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#main-content .stock-page-manual .manual-basket-supplier:focus-visible,#main-content .stock-page-manual .manual-basket-select-all:focus-visible,#main-content .stock-page-manual .manual-basket-select input:focus-visible { outline:3px solid #7c3aed55; outline-offset:2px; }
 #main-content .stock-page-manual [data-manual-basket-quantity] { width:64px; min-width:64px; min-height:38px; height:38px; margin:0; padding:7px 8px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); text-align:center; font-size:12px; }
 #main-content .stock-page-manual .manual-basket-remove { min-height:38px; margin:0; padding:8px 0; color:#dc2626; font-size:12px; }
 #main-content .stock-page-manual .manual-basket-footer { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:16px 20px; border-top:1px solid var(--line); }
@@ -397,8 +408,8 @@
   #main-content .stock-page-manual .manual-added-medicines td:last-child { grid-column:1/-1; grid-row:3; }
   #main-content .stock-page-manual .manual-item-actions { justify-content:flex-end; gap:16px; }
   #main-content .stock-page-manual .manual-item-actions .btn,#main-content .stock-page-manual .manual-item-actions input { min-height:44px; height:44px; }
-  #main-content .stock-page-manual [data-manual-basket-quantity],#main-content .stock-page-manual .manual-basket-supplier select,#main-content .stock-page-manual .manual-basket-remove { min-height:44px; height:44px; }
-  #main-content .stock-page-manual .manual-items-error>.btn { min-height:44px; }
+  #main-content .stock-page-manual [data-manual-basket-quantity],#main-content .stock-page-manual .manual-basket-supplier,#main-content .stock-page-manual .manual-basket-remove { min-height:44px; height:44px; }
+  #main-content .stock-page-manual .manual-items-error>.btn,#main-content .stock-page-manual .manual-basket-select-all,#main-content .stock-page-manual .manual-basket-select { min-height:44px; }
 }
 @media(max-width:767px) {
   #main-content .stock-page-delivery .van-times .van-depot-field { align-items:stretch; }

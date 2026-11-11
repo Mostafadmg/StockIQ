@@ -55,15 +55,17 @@ export function createManualOrderAttempt(makeId=()=>crypto.randomUUID()) {
 /**
  * request(path) returns {ok,status,data}; data.matches/data.packs contain catalogue records.
  * onAdd(payload) imports the pack into the basket; onSend(payload) creates only its direct test order.
+ * mode:'basket' uses onSave(payload) to edit an existing line and locks its medicine identity.
  * onClose runs only after a user closes the owned modal, never during component cleanup.
  */
-export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,onClose=()=>{},preferredSupplier='Phoenix',onError=()=>{}}={}) {
-  if(!host||typeof request!=='function'||typeof onAdd!=='function')throw new TypeError('A host, request and onAdd callback are required.');
+export function mountManualSearch({host,request,onAdd,onSend,onSave,onQuote,onCompare,mode='manual',onClose=()=>{},preferredSupplier='Phoenix',onError=()=>{}}={}) {
+  const basketMode=mode==='basket';
+  if(!host||typeof request!=='function'||typeof (basketMode?onSave:onAdd)!=='function')throw new TypeError('A host, request and '+(basketMode?'onSave':'onAdd')+' callback are required.');
   const doc=host.ownerDocument,instance=++pickerCount,base=`dmd-picker-${instance}`;
   const abort=new AbortController();
   const listen=(target,type,callback,options={})=>target.addEventListener(type,callback,{...options,signal:abort.signal});
   const node=(tag,className,text)=>{const el=doc.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;};
-  const root=node('section','manual-dmd panel');
+  const root=node('section','manual-dmd panel');root.hidden=basketMode;
   const content=node('div','dmd-content');
   const provenanceBadge=node('span','dmd-provenance-badge','NHS dm+d · 9 Nov 2026');
   const sourceField=node('label','dmd-source-field');sourceField.htmlFor=`${base}-source`;sourceField.append(node('span','','Catalogue'));
@@ -123,6 +125,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   }
   async function addProduct(record,{quantity=1}={}){
     if(!alive||isAdding||medicineModal)return false;
+    if(basketMode)throw new Error('Save the existing basket line from its supplier modal.');
     const prepared=prepareManualProductSelection(record,{quantity}),pack=prepared.record;
     if(!PACK_TYPES.has(pack.type))throw new Error('Choose a medicine pack before adding to the basket.');
     isAdding=true;const sequence=searchSequence,focused=doc.activeElement,controls=[input,sourceSelect,...root.querySelectorAll('[data-dmd-add],[data-dmd-quantity]')],disabled=controls.map(control=>control.disabled);
@@ -144,19 +147,19 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     input.disabled=false;sourceSelect.disabled=false;selected=null;selectedPack=null;packs=[];selection.hidden=true;
     if(resetSearch){input.value='';query='';matches=[];searchSequence++;closeMatches();}
     if(notify&&alive)onClose();
-    if(alive&&input.isConnected!==false)input.focus();
+    if(alive&&basketMode){if(current.previousFocus?.isConnected&&(doc.activeElement===doc.body||current.dialog.contains(doc.activeElement)))current.previousFocus.focus();}else if(alive&&input.isConnected!==false)input.focus();
   }
-  function openMedicineModal(initialQuantity=1) {
+  function openMedicineModal(initialQuantity=1,initialSupplier=preferredSupplier) {
     closeMedicineModal({notify:false,force:true});
     const layer=node('div','manual-order-backdrop');layer.dataset.manualOrderModal='';
     const dialog=node('section','manual-order-dialog manual-order-compact');dialog.tabIndex=-1;dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby',`${base}-modal-title`);
     const header=node('div','manual-order-header'),title=node('h2','',selected?.genericName||selected?.name||'Manual order');title.id=`${base}-modal-title`;
-    const closeButton=node('button','manual-order-close','×');closeButton.type='button';closeButton.setAttribute('aria-label','Close manual order');
+    const closeButton=node('button','manual-order-close','×');closeButton.type='button';closeButton.setAttribute('aria-label',basketMode?'Close basket supplier options':'Close manual order');
     const headerActions=node('div','manual-order-header-actions'),optionsButton=node('button','btn btn-soft manual-order-options-toggle','More options');optionsButton.type='button';optionsButton.disabled=true;optionsButton.setAttribute('aria-expanded','false');headerActions.append(optionsButton,closeButton);header.append(title,headerActions);
     const body=node('div','manual-order-content');dialog.append(header,body);layer.append(dialog);
-    const background=doc.getElementById('app'),previousOverflow=doc.body.style.overflow,previousInert=background?.inert;
+    const background=doc.getElementById('app'),previousOverflow=doc.body.style.overflow,previousInert=background?.inert,previousFocus=doc.activeElement;
     doc.body.style.overflow='hidden';if(background)background.inert=true;doc.body.append(layer);
-    medicineModal={layer,dialog,body,title,optionsButton,closeButton,previousOverflow,background,previousInert,initialQuantity,selectedSupplier:preferredSupplier,quoteSequence:0,quoteChain:Promise.resolve(),attempt:createManualOrderAttempt()};
+    medicineModal={layer,dialog,body,title,optionsButton,closeButton,previousOverflow,background,previousInert,previousFocus,initialQuantity,selectedSupplier:initialSupplier,quoteSequence:0,quoteChain:Promise.resolve(),attempt:createManualOrderAttempt()};
     input.disabled=true;sourceSelect.disabled=true;
     listen(closeButton,'click',()=>closeMedicineModal());
     listen(layer,'click',event=>{event.stopPropagation();if(event.target===layer)closeMedicineModal();});
@@ -226,10 +229,10 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     const notesField=node('label','field');notesField.htmlFor=`${base}-notes`;notesField.append(node('span','','Order note (optional)'));const notes=node('textarea','');notes.id=`${base}-notes`;notes.name='notes';notes.maxLength=500;notes.rows=2;notes.placeholder='Note for this test order';notesField.append(notes);notesSection.append(notesField);
     const scenarioField=node('label','field');scenarioField.htmlFor=`${base}-scenario`;scenarioField.append(node('span','','Test response'));const scenario=node('select','');scenario.id=`${base}-scenario`;scenario.name='scenario';for(const [value,text] of [['full','All packs accepted'],['partial','Some packs unavailable'],['unavailable','No packs available']]){const option=node('option','',text);option.value=value;scenario.append(option);}scenario.value='full';scenarioField.append(scenario);scenarioSection.append(scenarioField,node('small','','For testing only. No supplier is contacted.'));
     const reference=node('p','manual-order-reference',packReference(selectedPack));reference.title=reference.textContent;medicineSection.append(reference);
-    const optionSections=[['Notes',notesSection],['Test response',scenarioSection],['Medicine details',medicineSection]];optionSections.forEach(([name,section],index)=>{const tab=node('button','manual-options-tab',name);tab.type='button';tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(index===0));tab.id=`${base}-option-tab-${index}`;tab.setAttribute('aria-controls',`${base}-option-panel-${index}`);section.id=`${base}-option-panel-${index}`;section.setAttribute('role','tabpanel');section.setAttribute('aria-labelledby',tab.id);section.hidden=index!==0;listen(tab,'click',()=>{optionSections.forEach(([,panel],panelIndex)=>panel.hidden=panelIndex!==index);for(const button of tabs.children)button.setAttribute('aria-selected',String(button===tab));});tabs.append(tab);});optionsView.append(tabs,notesSection,scenarioSection,medicineSection);
+    const optionSections=basketMode?[['Medicine details',medicineSection]]:[['Notes',notesSection],['Test response',scenarioSection],['Medicine details',medicineSection]];optionSections.forEach(([name,section],index)=>{const tab=node('button','manual-options-tab',name);tab.type='button';tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(index===0));tab.id=`${base}-option-tab-${index}`;tab.setAttribute('aria-controls',`${base}-option-panel-${index}`);section.id=`${base}-option-panel-${index}`;section.setAttribute('role','tabpanel');section.setAttribute('aria-labelledby',tab.id);section.hidden=index!==0;listen(tab,'click',()=>{optionSections.forEach(([,panel],panelIndex)=>panel.hidden=panelIndex!==index);for(const button of tabs.children)button.setAttribute('aria-selected',String(button===tab));});tabs.append(tab);});optionsView.append(tabs,...optionSections.map(([,section])=>section));
     const footer=node('div','manual-order-footer'),chosen=node('div','manual-order-chosen'),chosenTotal=node('strong','','Select a supplier'),chosenInfo=node('small','');chosen.append(chosenTotal,chosenInfo);
     const message=node('p','manual-order-status');message.setAttribute('role','status');message.setAttribute('aria-live','polite');message.tabIndex=-1;
-    const actions=node('div','manual-order-actions'),add=node('button','btn manual-order-add','Add to basket'),send=node('button','btn btn-primary manual-order-send','Send now');add.type='button';send.type='submit';actions.append(add,send);footer.append(chosen,message,actions);
+    const actions=node('div','manual-order-actions'),add=node('button',basketMode?'btn manual-order-cancel':'btn manual-order-add',basketMode?'Cancel':'Add to basket'),send=node('button',basketMode?'btn btn-primary manual-order-save':'btn btn-primary manual-order-send',basketMode?'Save basket changes':'Send now');add.type='button';send.type='submit';actions.append(add,send);footer.append(chosen,message,actions);
     form.append(toolbar,supplier,brandStatus,quotePanel,comparisonPanel,optionsView,footer);body.append(form);current.optionsButton.disabled=false;current.optionsButton.setAttribute('aria-expanded','false');current.optionsButton.textContent='More options';
     let quoteValue=null,quoteLoading=false,comparisonValue=null,comparisonKey=null,brandOptions=[selectedPack],basePack=selectedPack,brandLoading=false,offerPage=0,optionsOpen=false;
     const active=()=>alive&&medicineModal===current&&form.isConnected;
@@ -237,7 +240,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     const brandLabel=pack=>[pack.brand||pack.name,pack.manufacturer].filter(Boolean).join(' · ');
     const updateTitle=()=>{current.title.textContent=titleFor(selectedPack);current.title.title=current.title.textContent;reference.textContent=packReference(selectedPack);reference.title=reference.textContent;};
     const renderBrands=()=>{brand.replaceChildren();brandOptions.forEach((pack,index)=>{const option=node('option','',brandLabel(pack));option.value=String(index);option.dataset.packId=pack.id;option.dataset.packType=pack.type;option.selected=pack.id===selectedPack.id&&pack.type===selectedPack.type;brand.append(option);});brand.title=brandLabel(selectedPack);};renderBrands();
-    const updateActions=()=>{send.disabled=typeof onSend!=='function'||isAdding||(typeof onQuote==='function'&&(quoteLoading||!quoteValue));add.disabled=isAdding||quoteLoading;brand.disabled=isAdding||brandLoading;};
+    const updateActions=()=>{send.disabled=typeof (basketMode?onSave:onSend)!=='function'||isAdding||(typeof onQuote==='function'&&(quoteLoading||!quoteValue));add.disabled=isAdding||(!basketMode&&quoteLoading);brand.disabled=basketMode||isAdding||brandLoading;};
     const quotePayload=()=>({id:selectedPack.id,type:selectedPack.type,query:selectedPack.name.slice(0,200),quantity:Number(quantity.value),supplier:supplier.value,scenario:scenario.value});
     const updateChosen=()=>{const count=Number(quantity.value);chosenTotal.textContent=quoteValue?money(quoteValue.estimatedTotal):quoteLoading?'Checking price…':'Price unavailable';chosenInfo.textContent=quoteValue?`${supplier.value} · ${quoteValue.acceptedQuantity} of ${quoteValue.requestedQuantity} packs`:`${supplier.value} · ${Number.isInteger(count)?count:'—'} ${count===1?'pack':'packs'}`;};
     const quoteFor=name=>quoteValue?.supplier===name?quoteValue:comparisonValue?.quotes.find(quote=>quote.supplier===name);
@@ -287,7 +290,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
       });},180);
     }
     function loadBrands(pack){
-      const sequence=current.brandSequence=(current.brandSequence||0)+1,key=pack.type+':'+pack.id;brandOptions=[pack];renderBrands();brandLoading=false;brand.disabled=false;brandStatus.hidden=true;if(!['AMPP','VMPP'].includes(pack.type))return;
+      const sequence=current.brandSequence=(current.brandSequence||0)+1,key=pack.type+':'+pack.id;brandOptions=[pack];renderBrands();brandLoading=false;brand.disabled=false;brandStatus.hidden=true;if(basketMode){brand.disabled=true;brand.title=brandLabel(pack)+' · Current basket medicine';return;}if(!['AMPP','VMPP'].includes(pack.type))return;
       brandLoading=true;brand.disabled=true;void (async()=>{try{const response=await request(`/api/dmd/brands?id=${encodeURIComponent(pack.id)}&type=${encodeURIComponent(pack.type)}`);if(!active()||sequence!==current.brandSequence||basePack.type+':'+basePack.id!==key||selectedPack.type+':'+selectedPack.id!==key)return;
         if(!response?.ok)throw new Error('Brand alternatives unavailable. The selected pack is unchanged.');const options=normaliseDmdRecords(response.data?.packs).filter(record=>['AMPP','VMPP'].includes(record.type));if(!options.some(record=>record.id===pack.id&&record.type===pack.type))throw new Error('Brand alternatives unavailable. The selected pack is unchanged.');
         selectedPack={...pack,...options.find(record=>record.id===pack.id&&record.type===pack.type),name:pack.name};brandOptions=[selectedPack,...options.filter(record=>record.id!==pack.id||record.type!==pack.type)];renderBrands();updateTitle();renderOffers();if(response.data?.truncated){brandStatus.textContent=`Showing ${brandOptions.length} exact-pack brand options.`;brandStatus.title=brandStatus.textContent;brandStatus.hidden=false;}
@@ -295,26 +298,26 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
       finally{if(active()&&sequence===current.brandSequence){brandLoading=false;brand.disabled=isAdding;}}})();
     }
     function edit(){current.attempt.invalidate();message.textContent='';message.classList.remove('is-error');}
-    listen(brand,'change',()=>{if(isAdding||!active())return;const pack=brandOptions[Number(brand.value)];if(!pack)return;selectedPack=pack;brand.title=brandLabel(pack);updateTitle();edit();loadQuote();});
-    listen(packSelect,'change',()=>{const pack=packs[Number(packSelect.value)];if(!pack||isAdding)return;basePack=selectedPack=pack;updateTitle();edit();loadQuote();loadBrands(pack);});
+    listen(brand,'change',()=>{if(basketMode||isAdding||!active())return;const pack=brandOptions[Number(brand.value)];if(!pack)return;selectedPack=pack;brand.title=brandLabel(pack);updateTitle();edit();loadQuote();});
+    listen(packSelect,'change',()=>{const pack=packs[Number(packSelect.value)];if(basketMode||!pack||isAdding)return;basePack=selectedPack=pack;updateTitle();edit();loadQuote();loadBrands(pack);});
     listen(quantity,'input',()=>{edit();loadQuote();});listen(notes,'input',edit);listen(supplier,'change',()=>useSupplier(supplier.value));listen(scenario,'change',()=>{edit();loadQuote();});
     listen(previous,'click',()=>{if(offerPage>0){offerPage--;renderOffers();}});listen(next,'click',()=>{if((offerPage+1)*pageSize()<suppliers.length){offerPage++;renderOffers();}});
     const resize=()=>{if(!alive||medicineModal!==current)return;const size=pageSize();if(active()){offerPage=Math.min(offerPage,Math.ceil(suppliers.length/size)-1);renderOffers();}};if(doc.defaultView){listen(doc.defaultView,'resize',resize);if(doc.defaultView.visualViewport)listen(doc.defaultView.visualViewport,'resize',resize);}
     listen(current.optionsButton,'click',()=>{if(!active())return;optionsOpen=!optionsOpen;current.optionsButton.textContent=optionsOpen?'Back to offers':'More options';current.optionsButton.setAttribute('aria-expanded',String(optionsOpen));toolbar.hidden=quotePanel.hidden=comparisonPanel.hidden=optionsOpen;optionsView.hidden=!optionsOpen;if(optionsOpen)tabs.querySelector('[aria-selected="true"]')?.focus();});
     const submit=async kind=>{
       if(isAdding||!selectedPack||!active())return;let payload;try{payload=current.attempt.prepare(selectedPack,{quantity:quantity.value,supplier:supplier.value,notes:notes.value,scenario:scenario.value});}catch(error){message.textContent=error.message;message.classList.add('is-error');quantity.focus();return;}
-      if(kind==='sent'&&typeof onSend!=='function')return;if(quoteLoading||kind==='sent'&&typeof onQuote==='function'&&!quoteValue){message.textContent='Check the supplier estimate before sending. Retry the supplier check above.';return;}
-      const pack=selectedPack;isAdding=true;controls.forEach(control=>control.disabled=true);renderOffers();message.classList.remove('is-error');message.textContent=kind==='sent'?'Sending test order…':'Adding to basket…';send.textContent=kind==='sent'?'Sending…':'Send now';add.textContent=kind==='added'?'Adding…':'Add to basket';
-      try{const result=await (kind==='sent'?onSend(payload):onAdd(payload));if(kind==='sent'&&(!result?.order?.id||typeof result.order.id!=='string'))throw new Error('The order response was incomplete. Try again to check the same request.');current.attempt.complete();if(active()){renderModalResult(kind,result,payload.quantity,pack);setStatus(kind==='sent'?`Test order ${result.order.id}: ${result.order.fulfilment?.status||'accepted'}.`:`${payload.quantity} packs added to the test basket.`);}}
+      if(typeof (basketMode?onSave:kind==='sent'?onSend:onAdd)!=='function')return;if(quoteLoading||(basketMode||kind==='sent')&&typeof onQuote==='function'&&!quoteValue){message.textContent=basketMode?'Check the supplier estimate before saving. Retry the supplier check above.':'Check the supplier estimate before sending. Retry the supplier check above.';return;}
+      const pack=selectedPack;isAdding=true;controls.forEach(control=>control.disabled=true);renderOffers();message.classList.remove('is-error');message.textContent=basketMode?'Saving basket changes…':kind==='sent'?'Sending test order…':'Adding to basket…';send.textContent=basketMode?'Saving…':kind==='sent'?'Sending…':'Send now';add.textContent=basketMode?'Cancel':kind==='added'?'Adding…':'Add to basket';
+      try{if(basketMode){await onSave({id:payload.id,type:payload.type,quantity:payload.quantity,supplier:payload.supplier});current.attempt.complete();if(active()){setStatus('Basket updated.');closeMedicineModal({force:true});}return;}const result=await (kind==='sent'?onSend(payload):onAdd(payload));if(kind==='sent'&&(!result?.order?.id||typeof result.order.id!=='string'))throw new Error('The order response was incomplete. Try again to check the same request.');current.attempt.complete();if(active()){renderModalResult(kind,result,payload.quantity,pack);setStatus(kind==='sent'?`Test order ${result.order.id}: ${result.order.fulfilment?.status||'accepted'}.`:`${payload.quantity} packs added to the test basket.`);}}
       catch(error){if(active()){message.textContent=error?.message||'The request could not be completed. Try again.';message.classList.add('is-error');onError(error);}}
-      finally{isAdding=false;if(active()){controls.forEach(control=>control.disabled=false);updateActions();renderOffers();send.textContent='Send now';add.textContent='Add to basket';}}
+      finally{isAdding=false;if(active()){controls.forEach(control=>control.disabled=false);updateActions();renderOffers();send.textContent=basketMode?'Save basket changes':'Send now';add.textContent=basketMode?'Cancel':'Add to basket';}}
     };
-    listen(add,'click',event=>{event.preventDefault();void submit('added');});listen(form,'submit',event=>{event.preventDefault();event.stopPropagation();void submit('sent');});
+    listen(add,'click',event=>{event.preventDefault();if(basketMode)closeMedicineModal();else void submit('added');});listen(form,'submit',event=>{event.preventDefault();event.stopPropagation();void submit('sent');});
     loadQuote();loadBrands(basePack);
   }
-  async function chooseMatch(index,initialQuantity=1){
+  async function chooseMatch(index,initialQuantity=1,initialSupplier=preferredSupplier){
     const match=matches[index];if(!match||isAdding)return;
-    selected=match;selectedPack=null;packs=[];input.value=match.name;query=match.name;searchSequence++;clearTimeout(timer);closeMatches();openMedicineModal(initialQuantity);selected=match;
+    selected=match;selectedPack=null;packs=[];input.value=match.name;query=match.name;searchSequence++;clearTimeout(timer);closeMatches();openMedicineModal(initialQuantity,initialSupplier);selected=match;
     const sequence=++packSequence;
     if(PACK_TYPES.has(match.type)){packs=[match];selectedPack=match;isLoadingPacks=false;renderSelection();setStatus('Medicine selected.');return;}
     isLoadingPacks=true;renderSelection();setStatus('Loading available pack sizes…');
@@ -394,8 +397,9 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   const cleanup=()=>{if(!alive)return;alive=false;cancelFocusClose();optionPointer=null;lastPointerInteraction=null;searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
   cleanup.openProduct=(record,options={})=>{
     if(!alive||isAdding)return false;
-    const prepared=prepareManualProductSelection(record,options);matches=[prepared.record];
-    void chooseMatch(0,prepared.quantity);return true;
+    const prepared=prepareManualProductSelection(record,options);if(basketMode&&!PACK_TYPES.has(prepared.record.type))throw new Error('Choose a medicine pack already in your basket.');
+    const supplier=options.supplier??preferredSupplier;if(!['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse'].includes(supplier))throw new Error('Choose a wholesaler.');matches=[prepared.record];
+    void chooseMatch(0,prepared.quantity,supplier);return true;
   };
   cleanup.addProduct=addProduct;
   return cleanup;

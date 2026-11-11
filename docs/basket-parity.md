@@ -29,8 +29,18 @@ this inspection.
 Basket entry points use `/review`. Quantities, removal, supplier allocation,
 sorting, selection and draft restoration stay on the review page. Refreshing
 recalculates test quotes; it does not contact a supplier. Submission accepts
-the selected valid lines and retains other basket lines. With no explicit
-selection, all ready lines are included, matching the original application.
+only explicitly checked valid lines and retains unchecked basket lines. Items
+start selected, with Select all / Clear selection and individual checkboxes in
+both the Manual Orders Basket tab and full review. Selection stays shared
+while navigating the app; clearing it disables submission instead of falling
+back to all lines. New basket entries start selected.
+
+Supplier triggers now open the same compact supplier-price and delivery modal
+as Manual Orders. The basket mode keeps the current medicine identity fixed,
+shows its saved supplier initially and changes only quantity and supplier via
+one explicit Save basket changes PATCH. Opening, comparing and cancelling do
+not import products, add packs or submit orders. A failed save keeps the edits
+open for retry.
 
 NHS pack identities remain real reference records. Supplier prices, availability,
 delivery estimates and submissions remain simulations. The review only presents

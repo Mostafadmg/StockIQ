@@ -1,5 +1,4 @@
 import {renderView,renderManualItems} from './views.js';
-import {renderBasketSupplierOptions} from './basket-review.js';
 import {mountManualSearch} from './manual-search.js';
 import {createManualOrderActions} from './manual-orders.js';
 import {icon} from './icons.js';
@@ -9,7 +8,7 @@ let manualSearchCleanup=null;
 const testWorkspaceSnapshots=new Map();
 let ui={},mobileMenu=false;
 const basketReview={review:null,notes:'',loading:false,error:'',sourceView:'auto',selected:new Set(),sort:{key:'name',dir:'asc'},draftSaved:false};
-let basketReviewSequence=0,supplierSheetState=null;
+let basketReviewSequence=0,basketSupplierEditor=null,basketSelectionReady=false,basketKnownIds=new Set();
 const $=s=>document.querySelector(s);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=v=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(Number(v)||0);
@@ -27,7 +26,7 @@ async function request(path,method='GET',body,retry=true,id=workspaceId){if(!/^\
 async function call(path,method='GET',body){const r=await request(path,method,body);if(!r.ok)throw new Error(typeof r.error==='object'?r.error.message:r.error||'Request failed');return r.data;}
 let toastTimer;function toast(message){$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4500);}
 function menuHTML(name,items){return `<div class="nav-dropdown"><button class="nav-item ${items.some(([v])=>v===view)?'active':''}" data-menu="${name}" aria-expanded="${menu===name}">${name}${icon('chevron','nav-chevron')}</button>${menu===name?`<div class="dropdown-menu">${items.map(([v,t])=>`<button data-nav="${v}" class="${v===view?'chosen':''}">${escape(t)}${v==='api'?'<span class="badge purple">DEV</span>':''}</button>`).join('')}</div>`:''}</div>`;}
-function render(){if(!state)return;manualSearchCleanup?.();manualSearchCleanup=null;const basketCount=state.basket.reduce((n,p)=>n+p.quantity,0),low=state.products.filter(p=>p.stock<(state.settings.fastTargets?.[p.id]??p.target)).length;document.title=`${titles[view]||'StockIQ'} · StockIQ Ordering`;
+function render(){if(!state)return;disposeBasketSupplierEditor();syncBasketSelection();ui.manualBasketSelected=basketReview.selected;manualSearchCleanup?.();manualSearchCleanup=null;const basketCount=state.basket.reduce((n,p)=>n+p.quantity,0),low=state.products.filter(p=>p.stock<(state.settings.fastTargets?.[p.id]??p.target)).length;document.title=`${titles[view]||'StockIQ'} · StockIQ Ordering`;
 if(ui.demoLogin){renderLogin();return;}
 $('#app').innerHTML=`<header class="app-header"><button class="brand" data-nav="auto" aria-label="Go to Auto Orders"><img src="/stockiq-logo.svg" alt="StockIQ" width="40" height="40"></button><button class="icon-button mobile-menu-button" data-action="mobile-menu" aria-label="Open menu" aria-expanded="${mobileMenu}">${icon('menu')}</button><span class="mobile-page-title">${escape(titles[view]||'StockIQ')}</span><nav class="main-nav ${mobileMenu?'mobile-menu-open':''}" aria-label="Main navigation">${[['auto','Auto Orders'],['manual','Manual Orders'],['goods','Goods In'],['history','History']].map(([v,t])=>`<button class="nav-item ${view===v?'active':''}" data-nav="${v}">${t}${v==='auto'?`<span class="count-pill">${low}</span>`:''}</button>`).join('')}${menuHTML('Advanced',advanced)}${menuHTML('Tools',tools)}</nav><div class="header-actions"><span class="clock" id="header-clock">${new Date().toLocaleTimeString('en-GB')}</span><button class="icon-button support-button" data-action="support-chat" aria-label="Open support chat">${icon('chat')}</button><span class="branch-name">St Mellons Pharmacy</span><button class="icon-button surplus-button" data-nav="surplus" aria-label="Surplus to send to other branches">${icon('truck')}</button><button class="icon-button notification" data-action="alerts" aria-label="Alerts">${icon('bell')}<b>${ui.alertsRead||!low?'':low}</b></button><button class="icon-button text-button" data-action="text-size" aria-label="Switch text size">A</button><button class="icon-button" data-action="theme" aria-label="Switch colour theme">${icon(document.body.classList.contains('dark')?'sun':'moon')}</button><button class="icon-button basket-trigger ${basketCount?'has-items':''} ${view==='review'?'active':''}" data-action="basket" aria-label="Basket" ${view==='review'?'aria-current="page" data-basket-active':''}>${icon('basket')}<b>${basketCount}</b></button><button class="avatar" data-action="account" aria-label="Branch account">B</button></div></header><main id="main-content" class="view-${view}">${view==='settings'?settingsView():renderView(view,{state:{...state,products:state.products.filter(p=>!hiddenPending.has(p.id)||view!=='auto')},search,filter,selected,subtab,apiResults,historyFrom,historyTo,ui,basketReview,escape,money})}</main>`;
 if(view==='manual'){const host=document.querySelector('#manual-catalogue');if(host)manualSearchCleanup=mountManualSearch({host,request,preferredSupplier:state.settings.preferredSupplier,onError:()=>{},onClose:()=>{render();document.querySelector('.dmd-query')?.focus();},...createManualOrderActions({call,onUpdate:updateManualTotals,runMutation:async callback=>{if(busy)throw new Error('Please wait for the current change to finish.');busy=true;try{return await callback();}finally{busy=false;}}})});}
@@ -36,17 +35,55 @@ const manualItemTabs=['ordered','rejected','basket'];
 function refreshManualItems(focusTab=false){
  const host=document.querySelector('#manual-order-items');if(!host)return;
  const tab=manualItemTabs.includes(ui.manualTab)?ui.manualTab:'ordered';
- host.innerHTML=renderManualItems(state,{escape,money,tab,busy:Boolean(ui.manualItemsBusy),error:ui.manualItemsError||'',notice:ui.manualItemsNotice||'',needsReview:Boolean(ui.manualBasketNeedsReview)});
+ syncBasketSelection();ui.manualBasketSelected=basketReview.selected;
+ host.innerHTML=renderManualItems(state,{escape,money,tab,selected:basketReview.selected,busy:Boolean(ui.manualItemsBusy),error:ui.manualItemsError||'',notice:ui.manualItemsNotice||'',needsReview:Boolean(ui.manualBasketNeedsReview)});
  if(focusTab)host.querySelector(`[data-manual-tab="${tab}"]`)?.focus();
 }
 function switchManualItemsTab(tab){if(view!=='manual'||!manualItemTabs.includes(tab))return;ui.manualTab=tab;refreshManualItems(true);}
 function updateManualTotals(){refreshManualItems();const count=state.basket.reduce((n,p)=>n+p.quantity,0),total=state.basket.reduce((n,p)=>n+p.quantity*p.price,0);const badge=document.querySelector('.basket-trigger b');if(badge)badge.textContent=String(count);document.querySelector('.basket-trigger')?.classList.toggle('has-items',count>0);const summary=document.querySelector('.manual-total strong');if(summary)summary.textContent=money(total);const next=document.querySelector('.continue-button');if(next){next.disabled=!state.basket.length;next.setAttribute('aria-disabled',String(next.disabled));}const tags=document.querySelector('.basket-supplier-tags');if(tags)tags.innerHTML=[...new Set(state.basket.map(p=>p.supplier))].map(name=>`<span class="supplier-tag ${escape(name.toLowerCase())}">${escape(name)}<b>${money(state.basket.filter(p=>p.supplier===name).reduce((n,p)=>n+p.quantity*p.price,0))}</b></span>`).join('');}
 function renderLogin(){$('#app').innerHTML=`<div class="login-screen"><form id="demo-login" class="login-card"><img src="/stockiq-logo.svg" alt="StockIQ" width="56" height="56"><h1>StockIQ Branch</h1><p>Sign in to continue</p><label class="field">Email Address<input id="login-email" type="email" value="demo@stockiq.test" required autocomplete="username"></label><label class="field">Password<input type="password" placeholder="Demo password" autocomplete="off"></label><p class="demo-login-note">Test workspace · This form does not sign in to the original site.</p><button class="btn btn-primary full" type="submit">Sign In</button><small>StockIQ © ${new Date().getFullYear()}</small></form></div>`;}
 function settingsView(){return `<div class="page-head"><div><div class="eyebrow">WORKSPACE</div><h1>Test workspace settings</h1><p>Preferences for your sandbox. Changes do not reach the original site.</p></div></div><div class="panel settings-panel"><h2>Ordering preferences</h2>${[['autoOrder','Show automatic order suggestions'],['lowStockAlerts','Low stock notifications']].map(([key,label])=>`<label class="settings-row"><span>${label}</span><input type="checkbox" data-setting="${key}" ${state.settings[key]?'checked':''}></label>`).join('')}<div class="settings-row"><span>Data storage</span><span class="muted">Saved in this browser; session API state is temporary</span></div><button class="btn" data-action="export-workspace">Export workspace JSON</button><button class="btn danger" data-action="reset">Reset sample data</button></div>`;}
-function navigate(v,tab=''){if(!titles[v])v='auto';if(v==='review'&&view!=='review'){basketReview.sourceView=view;basketReview.selected.clear();}else if(v!=='review'){basketReviewSequence++;basketReview.loading=false;}view=v;search='';filter='';subtab=tab;historyFrom='';historyTo='';selected.clear();menu='';mobileMenu=false;ui={};history.pushState({},'',paths[v]||'/');render();if(v==='review')void refreshBasketReview();window.scrollTo(0,0);}
-function modal(title,body,wide=false){if(supplierSheetState)close();$('#overlay').innerHTML=`<div class="modal-backdrop"><section class="modal ${wide?'modal-wide':''}" role="dialog" aria-modal="true" aria-label="${escape(title)}"><div class="modal-header"><h2>${escape(title)}</h2><button class="icon-button" data-action="close" aria-label="Close dialog">${icon('close')}</button></div>${body}</section></div>`;$('#overlay').querySelector('button,input,textarea')?.focus();}
-function close(){const sheet=supplierSheetState;supplierSheetState=null;$('#overlay').innerHTML='';if(sheet){sheet.background.inert=sheet.previousInert;if(sheet.previousFocus?.isConnected)sheet.previousFocus.focus();else document.querySelector(`[data-action="basket-supplier-options"][data-id="${CSS.escape(sheet.id)}"]`)?.focus();}}
-function syncBasketSelection(){const ids=new Set(state.basket.map(line=>line.id));basketReview.selected=new Set([...basketReview.selected].filter(id=>ids.has(id)));}
+function navigate(v,tab=''){if(!titles[v])v='auto';if(v==='review'&&view!=='review'){basketReview.sourceView=view;}else if(v!=='review'){basketReviewSequence++;basketReview.loading=false;}view=v;search='';filter='';subtab=tab;historyFrom='';historyTo='';selected.clear();menu='';mobileMenu=false;ui={};history.pushState({},'',paths[v]||'/');render();if(v==='review')void refreshBasketReview();window.scrollTo(0,0);}
+function modal(title,body,wide=false){disposeBasketSupplierEditor();$('#overlay').innerHTML=`<div class="modal-backdrop"><section class="modal ${wide?'modal-wide':''}" role="dialog" aria-modal="true" aria-label="${escape(title)}"><div class="modal-header"><h2>${escape(title)}</h2><button class="icon-button" data-action="close" aria-label="Close dialog">${icon('close')}</button></div>${body}</section></div>`;$('#overlay').querySelector('button,input,textarea')?.focus();}
+function close(){disposeBasketSupplierEditor();$('#overlay').innerHTML='';}
+function syncBasketSelection(){
+ const ids=new Set(state.basket.map(line=>line.id));
+ if(!basketSelectionReady){basketReview.selected=new Set(ids);basketSelectionReady=true;}
+ else{basketReview.selected=new Set([...basketReview.selected].filter(id=>ids.has(id)));for(const id of ids)if(!basketKnownIds.has(id))basketReview.selected.add(id);}
+ basketKnownIds=ids;
+}
+function disposeBasketSupplierEditor(){const editor=basketSupplierEditor;if(!editor)return;basketSupplierEditor=null;editor.cleanup?.();}
+function openBasketSupplierEditor(id,trigger){
+ if(busy||basketReview.loading||ui.manualItemsBusy)return;
+ const line=state.basket.find(item=>item.id===id);if(!line||!['manual','review'].includes(view))return;
+ disposeBasketSupplierEditor();
+ const product=state.products.find(item=>item.id===id)||line,sourceView=view,context=ui;
+ const editor={id,sourceView,context,trigger:trigger||document.activeElement,saved:false,cleanup:null};basketSupplierEditor=editor;
+ const current=()=>basketSupplierEditor===editor&&view===sourceView&&ui===context&&state.basket.some(item=>item.id===id);
+ const ensureCurrent=()=>{if(!current())throw new Error('This basket item is no longer open. Reopen it before saving.');};
+ const focusTrigger=()=>{if(view!==sourceView||ui!==context)return;const target=document.querySelector(`[data-action="${sourceView==='manual'?'manual-basket-supplier-options':'basket-supplier-options'}"][data-id="${CSS.escape(id)}"]`);(target||editor.trigger)?.focus();};
+ const record={...product,...line,id:product.dmdId||product.catalogueId||id,type:product.dmdType||product.catalogueType||'SAMPLE'};
+ editor.cleanup=mountManualSearch({host:document.createElement('div'),request,mode:'basket',preferredSupplier:line.supplier,
+  onQuote:async values=>{ensureCurrent();return call('/api/orders/quote','POST',{productId:id,quantity:values.quantity,supplier:values.supplier});},
+  onCompare:async values=>{ensureCurrent();return call('/api/orders/compare','POST',{productId:id,quantity:values.quantity});},
+  onSave:async values=>{
+   ensureCurrent();if(busy||basketReview.loading||context.manualItemsBusy)throw new Error('Please wait for the current basket change to finish.');
+   if(!Number.isInteger(values.quantity)||values.quantity<1||values.quantity>999)throw new Error('Enter 1–999 whole packs.');
+   if(!['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse'].includes(values.supplier))throw new Error('Choose a listed wholesaler.');
+   busy=true;
+   try{await call('/api/basket/'+encodeURIComponent(id),'PATCH',{quantity:values.quantity,supplier:values.supplier});editor.saved=true;basketReviewSequence++;basketReview.review=null;basketReview.error='';basketReview.draftSaved=false;syncBasketSelection();if(sourceView==='manual'&&current()){context.manualBasketNeedsReview=false;context.manualItemsError='';context.manualItemsNotice='Basket quantity and supplier updated.';}}
+   finally{busy=false;}
+  },
+  onClose:()=>{
+   if(basketSupplierEditor!==editor)return;basketSupplierEditor=null;editor.cleanup?.();
+   if(view!==sourceView||ui!==context)return;
+   if(sourceView==='manual'){if(editor.saved)updateManualTotals();focusTrigger();}
+   else if(editor.saved){const previous=document.activeElement;void refreshBasketReview().then(()=>{if(document.activeElement===document.body||document.activeElement===previous||!document.activeElement?.isConnected)focusTrigger();});}
+   else focusTrigger();
+  }
+ });
+ editor.cleanup.openProduct(record,{quantity:line.quantity,supplier:line.supplier});
+}
 async function refreshBasketReview(){
  const sequence=++basketReviewSequence;syncBasketSelection();basketReview.loading=true;basketReview.error='';if(view==='review')render();
  try{const result=await call('/api/basket/cascade','POST',{});if(sequence!==basketReviewSequence)return;basketReview.review=result;}
@@ -62,7 +99,7 @@ async function updateBasketLine(id,values){
   else if(Object.hasOwn(values,'quantity')){
    const raw=values.quantity,count=Number(raw);
    if(typeof raw!=='string'||!raw.trim()||!Number.isInteger(count)||count<0||count>999)throw new Error('Enter a whole number of packs between 0 and 999.');
-   if(count===0){method='DELETE';data=undefined;}else data={quantity:count};
+   if(count===0){method='DELETE';data=undefined;}else data={...values,quantity:count};
   }
   await call('/api/basket/'+encodeURIComponent(id),method,data);basketReview.review=null;syncBasketSelection();await refreshBasketReview();
  }catch(error){basketReview.loading=false;basketReview.error=error.message||'Could not update this basket line.';if(view==='review')render();}
@@ -70,8 +107,8 @@ async function updateBasketLine(id,values){
 }
 async function submitBasketReview(){
  if(basketReview.loading||!basketReview.review||basketReview.error)return;
- const items=state.basket.filter(line=>!basketReview.selected.size||basketReview.selected.has(line.id));
- if(!items.length){basketReview.error='Add a medicine before submitting an order.';render();return;}
+ syncBasketSelection();const items=state.basket.filter(line=>basketReview.selected.has(line.id));
+ if(!items.length)return;
  basketReview.loading=true;basketReview.error='';render();
  try{
   const result=await call('/api/orders/cascade','POST',{allocations:items.map(line=>({productId:line.id,supplier:line.supplier})),notes:basketReview.notes});
@@ -89,7 +126,7 @@ async function changeManualBasket(id,values){
   else if(Object.hasOwn(values,'quantity')){
    const raw=values.quantity,count=Number(raw);
    if(typeof raw!=='string'||!raw.trim()||!Number.isInteger(count)||count<0||count>999)throw new Error('Enter a whole number of packs between 0 and 999. The saved quantity is shown.');
-   if(count===0){method='DELETE';payload=undefined;}else payload={quantity:count};
+   if(count===0){method='DELETE';payload=undefined;}else payload={...values,quantity:count};
   }else if(!['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse'].includes(values.supplier))throw new Error('Choose a listed wholesaler.');
   await call('/api/basket/'+encodeURIComponent(id),method,payload);
   basketReviewSequence++;basketReview.review=null;syncBasketSelection();
@@ -104,13 +141,13 @@ async function changeManualBasket(id,values){
 }
 async function sendManualBasket(){
  if(view!=='manual'||busy||ui.manualItemsBusy||ui.manualBasketNeedsReview)return;
- const context=ui,lines=state.basket.map(line=>({id:line.id,quantity:line.quantity,supplier:line.supplier}));
+ syncBasketSelection();const context=ui,lines=state.basket.filter(line=>basketReview.selected.has(line.id)).map(line=>({id:line.id,quantity:line.quantity,supplier:line.supplier}));
  context.manualItemsError='';context.manualItemsNotice='';
- if(!lines.length){context.manualItemsError='Add a medicine to your basket before sending.';refreshManualItems();return;}
+ if(!lines.length){context.manualItemsError='Select at least one basket item before sending.';refreshManualItems();return;}
  // A focused field may not have emitted change yet. Require its displayed value to match the saved basket.
  for(const line of lines){
   const row=document.querySelector(`[data-manual-basket="${CSS.escape(line.id)}"]`),quantity=row?.querySelector('[data-manual-basket-quantity]'),supplier=row?.querySelector('[data-manual-basket-supplier]');
-  if(quantity&&(!quantity.value.trim()||!Number.isInteger(Number(quantity.value))||Number(quantity.value)!==line.quantity)||supplier&&supplier.value!==line.supplier){context.manualBasketNeedsReview=true;context.manualItemsError='Save the quantity and wholesaler changes before sending your basket.';refreshManualItems();return;}
+  if(quantity&&(!quantity.value.trim()||!Number.isInteger(Number(quantity.value))||Number(quantity.value)!==line.quantity)||supplier&&(supplier.dataset.supplier||supplier.value)!==line.supplier){context.manualBasketNeedsReview=true;context.manualItemsError='Save the quantity and wholesaler changes before sending your basket.';refreshManualItems();return;}
  }
  busy=true;context.manualItemsBusy=true;refreshManualItems();
  try{
@@ -150,12 +187,12 @@ async function runSuite(){
  toast(`${pass}/${apiResults.length} API checks passed in a separate test workspace.`);
 }
 async function action(name,id,el){
-if(name==='basket-supplier-options'){if(busy||basketReview.loading)return;const line=state.basket.find(item=>item.id===id);if(!line)return;const product=state.products.find(item=>item.id===id)||line,reviewLine=basketReview.review?.lines.find(item=>item.productId===id);const previousFocus=document.activeElement;modal('Switch supplier',renderBasketSupplierOptions(product,line,reviewLine));$('#overlay .modal')?.classList.add('basket-supplier-sheet');const background=$('#app');supplierSheetState={previousFocus,background,previousInert:background.inert,id};background.inert=true;return;}
-if(name==='basket-choose-supplier'){if(busy||basketReview.loading)return;const supplier=$('#overlay [name="basket-supplier-option"]:checked')?.value||el?.dataset.supplier;if(!supplier){toast('Choose a supplier first.');return;}close();await updateBasketLine(id,{supplier});if(view==='review')document.querySelector(`[data-action="basket-supplier-options"][data-id="${CSS.escape(id)}"]`)?.focus();return;}
+if(name==='basket-supplier-options'||name==='manual-basket-supplier-options'){openBasketSupplierEditor(id,el);return;}
 if(name==='basket-back'){close();navigate(titles[basketReview.sourceView]&&basketReview.sourceView!=='review'?basketReview.sourceView:'manual');return;}
 if(name==='basket-sort'){const key=el?.dataset.sort;if(!['wholesaler','lineTotal','name','unitPrice'].includes(key))return;basketReview.sort={key,dir:basketReview.sort.key===key?(basketReview.sort.dir==='asc'?'desc':'asc'):['lineTotal','unitPrice'].includes(key)?'desc':'asc'};render();return;}
-if(name==='basket-select-all'){const ids=state.basket.map(line=>line.id);basketReview.selected=ids.length&&ids.every(id=>basketReview.selected.has(id))?new Set():new Set(ids);render();return;}
-if(name==='basket-clear-selection'){basketReview.selected.clear();render();return;}
+if(name==='manual-basket-select-all'){if(busy||ui.manualItemsBusy)return;const ids=state.basket.map(line=>line.id);basketReview.selected=ids.length&&ids.every(id=>basketReview.selected.has(id))?new Set():new Set(ids);refreshManualItems();document.querySelector('[data-action="manual-basket-select-all"]')?.focus();return;}
+if(name==='basket-select-all'){if(busy||basketReview.loading)return;const ids=state.basket.map(line=>line.id);basketReview.selected=ids.length&&ids.every(id=>basketReview.selected.has(id))?new Set():new Set(ids);render();document.querySelector('[data-action="basket-select-all"]')?.focus();return;}
+if(name==='basket-clear-selection'){if(busy||basketReview.loading)return;basketReview.selected.clear();render();return;}
 if(name==='remove-basket'&&view==='review'){await updateBasketLine(id,{remove:true});return;}
 
 if(name==='manual-basket-view'){switchManualItemsTab('basket');document.querySelector('#manual-order-items')?.scrollIntoView?.({behavior:'smooth',block:'start'});return;}if(name==='manual-basket-restore'){if(view!=='manual'||busy||ui.manualItemsBusy)return;ui.manualBasketNeedsReview=false;ui.manualItemsError='';ui.manualItemsNotice='Saved basket values restored.';updateManualTotals();return;}if(name==='manual-basket-remove'){await changeManualBasket(id,{remove:true});return;}if(name==='manual-basket-submit'){await sendManualBasket();return;}if(name==='choose-manual-product'||name==='quick-add-manual-product'){if(busy)return;const product=state.products.find(p=>p.id===id);if(!product)return;const quantity=el?.closest('[data-manual-card]')?.querySelector('[data-manual-quantity]')?.value??qty(id),record={...product,id:product.dmdId||product.catalogueId||product.id,type:product.dmdType||product.catalogueType||'SAMPLE'};if(name==='choose-manual-product')manualSearchCleanup?.openProduct?.(record,{quantity});else{const label=el.textContent;el.disabled=true;el.textContent='Adding…';try{if(await manualSearchCleanup?.addProduct?.(record,{quantity}))toast('Product added to your test basket.');}finally{if(el.isConnected){el.disabled=false;el.textContent=label;}}}return;}if(name==='load-earlier'){const from=new Date(historyFrom||Date.now());from.setDate(from.getDate()-15);historyFrom=from.toISOString().slice(0,10);render();toast('Showing earlier matching test history.');return;}if(name==='dismiss-product'){hiddenPending.add(id);render();return;}if(name==='mobile-menu'){mobileMenu=!mobileMenu;render();return;}if(parityActions.has(name)){if(busy)return;busy=true;try{await handleParityAction(name,id,el,{get state(){return state;},ui,call,request,render,navigate,modal,close,toast,money,escape,basket,reviewBasket:refreshBasketReview,submitBasket:submitBasketReview,download,add,icon,act:action});}finally{busy=false;}return;}if(name==='reload'){location.reload();return;}if(name==='nav-history'){navigate('history');return;}if(name==='close'){close();return;}if(name==='basket'){basket();return;}
@@ -204,28 +241,18 @@ else if(name==='save-delivery'){const deliveryTimes={};document.querySelectorAll
 else if(name==='save-fast'){const fastTargets={};document.querySelectorAll('[data-target]').forEach(i=>{fastTargets[i.dataset.target]=Number(i.value);});await call('/api/settings','PATCH',{fastTargets});toast('Sample fast line targets saved.');}
 else if(name==='share'){const quantity=Number(document.querySelector(`[data-share="${CSS.escape(id)}"]`)?.value||1);if(!Number.isInteger(quantity)||quantity<1||quantity>(state.products.find(p=>p.id===id)?.stock||0))throw new Error('Choose an available quantity.');await call('/api/surplus/offers','POST',{productId:id,quantity});toast('Test surplus offer saved.');}
 else if(name==='submit-import'){const raw=$('#import-text')?.value||'';const rows=raw.split('\n').filter(row=>row.trim());if(!rows.length)throw new Error('Enter at least one product line.');const parsed=rows.map((row,index)=>{const [term,n]=row.split(',');const matches=state.products.filter(p=>p.name.toLowerCase()===term.trim().toLowerCase()||p.pip===term.trim());const product=matches[0]||state.products.find(p=>p.name.toLowerCase().includes(term.trim().toLowerCase()));const quantity=Number(n?.trim()||1);if(!term.trim()||!product)throw new Error(`Line ${index+1}: product not found in sample catalogue.`);if(!Number.isInteger(quantity)||quantity<1||quantity>999)throw new Error(`Line ${index+1}: quantity must be 1–999 whole packs.`);return {id:product.id,quantity};});for(const row of parsed)await add(row.id,row.quantity);toast(`${parsed.length} imported sample lines added to basket.`);}
-else if(name==='confirm-reset'){await call('/api/reset','POST',{});hiddenPending.clear();close();toast('Sample data reset.');}
+else if(name==='confirm-reset'){await call('/api/reset','POST',{});basketSelectionReady=false;basketKnownIds.clear();hiddenPending.clear();close();toast('Sample data reset.');}
 else{toast('This integration is represented with sample data in the draft.');}
 render();
 }finally{busy=false;document.body.classList.remove('working');}
 }
 document.addEventListener('click',e=>{const el=e.target.closest('button,[data-nav]');if(!el)return;if(el.dataset.manualTab){switchManualItemsTab(el.dataset.manualTab);return;}if(el.dataset.nav){close();navigate(el.dataset.nav);return;}if(el.dataset.menu){menu=menu===el.dataset.menu?'':el.dataset.menu;render();return;}if(el.dataset.subtab!==undefined){subtab=el.dataset.subtab;filter='';if(view==='goods'){const route={deliveries:'/goods-in/queue',claims:'/goods-in/claims',analytics:'/goods-in/analytics',settings:'/goods-in/settings','goods-analytics':'/goods-in/analytics','goods-settings':'/goods-in/settings'}[subtab];if(route)history.replaceState({},'',route);}render();return;}if(el.dataset.action)action(el.dataset.action,el.dataset.id,el).catch(e=>toast(e.message));});
 document.addEventListener('input',e=>{if(e.target.matches('[data-basket-notes],#cascade-notes')&&view==='review'){basketReview.notes=e.target.value;basketReview.draftSaved=false;return;}if(e.target.matches('[data-ui]')&&['search','text'].includes(e.target.type)){const key=e.target.dataset.ui,pos=e.target.selectionStart;ui[key]=e.target.value;render();const input=document.querySelector(`[data-ui="${CSS.escape(key)}"]`);input?.focus();input?.setSelectionRange(pos,pos);return;}if(e.target.matches('[data-search]')){search=e.target.value;const pos=e.target.selectionStart;render();const input=$('[data-search]');input?.focus();input?.setSelectionRange(pos,pos);}});
-document.addEventListener('change',async e=>{const el=e.target;try{if(el.hasAttribute('data-manual-basket-quantity')){await changeManualBasket(el.dataset.manualBasketQuantity,{quantity:el.value});return;}if(el.hasAttribute('data-manual-basket-supplier')){await changeManualBasket(el.dataset.manualBasketSupplier,{supplier:el.value});return;}if(el.matches('[name="basket-supplier-option"]')){const button=$('#overlay .basket-supplier-use');if(button)button.textContent='Use '+el.value+' · '+money(Number(el.dataset.basketOfferTotal))+' total';return;}if(el.matches('[data-review-sort]')){const key=el.value;if(['wholesaler','lineTotal','name','unitPrice'].includes(key)){basketReview.sort={key,dir:['lineTotal','unitPrice'].includes(key)?'desc':'asc'};render();}return;}if(el.dataset.reviewSelect){el.checked?basketReview.selected.add(el.dataset.reviewSelect):basketReview.selected.delete(el.dataset.reviewSelect);render();return;}if(el.dataset.basketSupplier){await updateBasketLine(el.dataset.basketSupplier,{supplier:el.value});return;}if(el.dataset.cascadeProduct){const line=ui.cascade?.lines.find(line=>line.productId===el.dataset.cascadeProduct),quote=line?.quotes.find(quote=>quote.supplier===el.value),preview=document.querySelector(`[data-cascade-estimate="${CSS.escape(el.dataset.cascadeProduct)}"]`);if(preview)preview.innerHTML=quotePreviewHTML(quote,escape);return;}if(el.dataset.ui){ui[el.dataset.ui]=el.type==='checkbox'?el.checked:el.value;render();}else if(el.dataset.autoShelf){await call(`/api/stock/${el.dataset.autoShelf}`,'POST',{quantity:Number(el.value)});render();}else if(el.matches('[data-history-from]')){historyFrom=el.value;render();}else if(el.matches('[data-history-to]')){historyTo=el.value;render();}else if(el.dataset.select){el.checked?selected.add(el.dataset.select):selected.delete(el.dataset.select);render();}else if(el.matches('[data-filter]')){filter=el.value;render();}else if(el.dataset.basketQty){if(view==='review')await updateBasketLine(el.dataset.basketQty,{quantity:el.value});else{await call(`/api/basket/${el.dataset.basketQty}`,'PATCH',{quantity:Number(el.value)});render();basket();}}else if(el.dataset.setting){await call('/api/settings','PATCH',{[el.dataset.setting]:el.checked});toast('Sandbox preference saved.');}else if(el.id==='import-file'&&el.files[0]){const file=el.files[0];if(/^image\/(jpeg|png|webp)$/.test(file.type)){if(file.size>10000000)throw new Error('Choose an image smaller than 10 MB.');const url=URL.createObjectURL(file);const image=new Image();image.src=url;image.alt='Reference screenshot — review products manually';image.onload=()=>URL.revokeObjectURL(url);$('#import-preview')?.replaceChildren(image);toast('Reference image loaded. Enter reviewed product lines alongside it.');}else{if(file.size>1000000)throw new Error('Choose a text file smaller than 1 MB.');if(!/\.(csv|txt)$/i.test(file.name))throw new Error('Choose a JPEG, PNG, WebP, CSV or text file.');$('#import-text').value=await file.text();toast('File loaded. Review the lines before adding to the test basket.');}}}catch(err){toast(err.message);}});
+document.addEventListener('change',async e=>{const el=e.target;try{if(el.hasAttribute('data-manual-basket-select')){if(busy||ui.manualItemsBusy)return;el.checked?basketReview.selected.add(el.dataset.manualBasketSelect):basketReview.selected.delete(el.dataset.manualBasketSelect);refreshManualItems();document.querySelector(`[data-manual-basket-select="${CSS.escape(el.dataset.manualBasketSelect)}"]`)?.focus();return;}if(el.hasAttribute('data-manual-basket-quantity')){await changeManualBasket(el.dataset.manualBasketQuantity,{quantity:el.value});return;}if(el.matches('select[data-manual-basket-supplier]')){await changeManualBasket(el.dataset.manualBasketSupplier,{supplier:el.value});return;}if(el.matches('[data-review-sort]')){const key=el.value;if(['wholesaler','lineTotal','name','unitPrice'].includes(key)){basketReview.sort={key,dir:['lineTotal','unitPrice'].includes(key)?'desc':'asc'};render();}return;}if(el.dataset.reviewSelect){if(busy||basketReview.loading)return;el.checked?basketReview.selected.add(el.dataset.reviewSelect):basketReview.selected.delete(el.dataset.reviewSelect);render();document.querySelector(`[data-review-select="${CSS.escape(el.dataset.reviewSelect)}"]`)?.focus();return;}if(el.dataset.basketSupplier){await updateBasketLine(el.dataset.basketSupplier,{supplier:el.value});return;}if(el.dataset.cascadeProduct){const line=ui.cascade?.lines.find(line=>line.productId===el.dataset.cascadeProduct),quote=line?.quotes.find(quote=>quote.supplier===el.value),preview=document.querySelector(`[data-cascade-estimate="${CSS.escape(el.dataset.cascadeProduct)}"]`);if(preview)preview.innerHTML=quotePreviewHTML(quote,escape);return;}if(el.dataset.ui){ui[el.dataset.ui]=el.type==='checkbox'?el.checked:el.value;render();}else if(el.dataset.autoShelf){await call(`/api/stock/${el.dataset.autoShelf}`,'POST',{quantity:Number(el.value)});render();}else if(el.matches('[data-history-from]')){historyFrom=el.value;render();}else if(el.matches('[data-history-to]')){historyTo=el.value;render();}else if(el.dataset.select){el.checked?selected.add(el.dataset.select):selected.delete(el.dataset.select);render();}else if(el.matches('[data-filter]')){filter=el.value;render();}else if(el.dataset.basketQty){if(view==='review')await updateBasketLine(el.dataset.basketQty,{quantity:el.value});else{await call(`/api/basket/${el.dataset.basketQty}`,'PATCH',{quantity:Number(el.value)});render();basket();}}else if(el.dataset.setting){await call('/api/settings','PATCH',{[el.dataset.setting]:el.checked});toast('Sandbox preference saved.');}else if(el.id==='import-file'&&el.files[0]){const file=el.files[0];if(/^image\/(jpeg|png|webp)$/.test(file.type)){if(file.size>10000000)throw new Error('Choose an image smaller than 10 MB.');const url=URL.createObjectURL(file);const image=new Image();image.src=url;image.alt='Reference screenshot — review products manually';image.onload=()=>URL.revokeObjectURL(url);$('#import-preview')?.replaceChildren(image);toast('Reference image loaded. Enter reviewed product lines alongside it.');}else{if(file.size>1000000)throw new Error('Choose a text file smaller than 1 MB.');if(!/\.(csv|txt)$/i.test(file.name))throw new Error('Choose a JPEG, PNG, WebP, CSV or text file.');$('#import-text').value=await file.text();toast('File loaded. Review the lines before adding to the test basket.');}}}catch(err){toast(err.message);}});
 document.addEventListener('keydown',e=>{
  const manualTab=e.target.closest?.('[data-manual-tab]');
  if(manualTab&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
   e.preventDefault();e.stopPropagation();const index=manualItemTabs.indexOf(manualTab.dataset.manualTab),next=e.key==='Home'?0:e.key==='End'?manualItemTabs.length-1:(index+(e.key==='ArrowRight'?1:-1)+manualItemTabs.length)%manualItemTabs.length;switchManualItemsTab(manualItemTabs[next]);return;
- }
- if(supplierSheetState){
-  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();return;}
-  if(e.key==='Tab'){
-   const dialog=$('#overlay .basket-supplier-sheet'),controls=[...dialog.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(control=>!control.disabled&&!control.hidden&&control.type!=='hidden'&&(!control.hasAttribute('tabindex')||control.tabIndex!==-1)),first=controls[0],last=controls.at(-1),active=document.activeElement;
-   if(!first){e.preventDefault();dialog.focus();return;}
-   if(e.shiftKey&&(active===first||!dialog.contains(active))){e.preventDefault();last.focus();}
-   else if(!e.shiftKey&&(active===last||!dialog.contains(active))){e.preventDefault();first.focus();}
-   return;
-  }
  }
  if(e.key==='Escape'){close();menu='';render();}
 });

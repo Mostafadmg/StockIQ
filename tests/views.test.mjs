@@ -13,8 +13,8 @@ test('manual order items include basket packs and exclude catalogue imports with
  const {parseHTML}=await import('linkedom'),state=seedWorkspace(),sample={...state.products[0],quantity:2,price:1.5,supplier:'Sigma'};
  state.orders=[];state.basket=[];state.products[0].catalogueId='imported-for-a-quote';
  const empty=parseHTML(renderManualItems(state)).document;assert.equal(empty.querySelector('[data-manual-card]'),null);assert.match(empty.documentElement.textContent,/No ordered items yet/);
- state.basket=[sample];const document=parseHTML(renderView('manual',{state,ui:{manualTab:'basket'}})).document,row=document.querySelector(`[data-manual-basket="${sample.id}"]`);
- assert.ok(document.querySelector('#manual-catalogue + #manual-order-items'));assert.ok(row);assert.match(row.textContent,/In basket/);assert.equal(row.querySelector('[data-manual-basket-quantity]').value,'2');assert.match(row.querySelector('.manual-item-total').textContent,/£3.00/);assert.match(row.textContent,/Sigma/);assert.equal(row.querySelector('[data-manual-basket-supplier] option[selected]').value,'Sigma');assert.equal(row.querySelector('[data-manual-basket-supplier]').querySelectorAll('option').length,7);assert.ok(row.querySelector('[data-action="manual-basket-remove"]'));assert.equal(document.querySelector('[data-action="manual-basket-submit"]').disabled,false);
+ state.basket=[sample];const document=parseHTML(renderView('manual',{state,ui:{manualTab:'basket',manualBasketSelected:new Set([sample.id])}})).document,row=document.querySelector(`[data-manual-basket="${sample.id}"]`);
+ assert.ok(document.querySelector('#manual-catalogue + #manual-order-items'));assert.ok(row);assert.match(row.textContent,/In basket/);assert.equal(row.querySelector('[data-manual-basket-quantity]').value,'2');assert.match(row.querySelector('.manual-item-total').textContent,/£3.00/);assert.match(row.textContent,/Sigma/);assert.equal(row.querySelector('[data-manual-basket-supplier]').dataset.supplier,'Sigma');assert.equal(row.querySelector('[data-manual-basket-supplier]').getAttribute('aria-haspopup'),'dialog');assert.equal(row.querySelector('[data-manual-basket-supplier]').dataset.action,'manual-basket-supplier-options');assert.equal(row.querySelector('[data-manual-basket-supplier]').querySelector('select'),null);assert.ok(row.querySelector('[data-manual-basket-select][checked]'));assert.ok(row.querySelector('[data-action="manual-basket-remove"]'));assert.equal(document.querySelector('[data-action="manual-basket-submit"]').disabled,false);
 });
 
 test('manual order items preserve submitted snapshots, acceptance counts and repeated packs in newest-first order',async()=>{
@@ -50,7 +50,7 @@ test('manual tabs count lines and split partial outcomes without duplicating acc
 test('manual basket controls respect busy state and empty submission while messages remain escaped',async()=>{
  const {parseHTML}=await import('linkedom'),item={...seedWorkspace().products[0],quantity:2},busy=parseHTML(renderManualItems({basket:[item],orders:[]},{tab:'basket',busy:true,error:'<img src=x> failed',notice:'<script>saved</script>'})).document;
  for(const selector of ['[data-manual-basket-quantity]','[data-manual-basket-supplier]','[data-action="manual-basket-remove"]','[data-action="manual-basket-submit"]'])assert.equal(busy.querySelector(selector).disabled,true);
- assert.equal(busy.querySelector('img'),null);assert.equal(busy.querySelector('script'),null);assert.match(busy.querySelector('[role="alert"]').textContent,/<img src=x>/);assert.match(busy.querySelector('[role="status"]').textContent,/<script>saved/);
+ assert.equal(busy.querySelector('img'),null);assert.equal(busy.querySelector('script'),null);assert.match(busy.querySelector('[role="alert"]').textContent,/<img src=x>/);assert.match(busy.querySelector('.manual-items-notice[role="status"]').textContent,/<script>saved/);
  const empty=parseHTML(renderManualItems({basket:[],orders:[]},{tab:'basket'})).document;assert.equal(empty.querySelector('[data-action="manual-basket-submit"]').disabled,true);assert.match(empty.querySelector('.manual-items-empty').textContent,/Your basket is empty/);
  const review=parseHTML(renderManualItems({basket:[item],orders:[]},{tab:'basket',needsReview:true})).document;assert.equal(review.querySelector('[data-action="manual-basket-submit"]').disabled,true);assert.match(review.querySelector('[data-action="manual-basket-restore"]').textContent,/Use saved basket values/);
 });
@@ -123,4 +123,14 @@ test('History date filters and group headings agree at a London summer-time date
  assert.deepEqual([...document.querySelectorAll('.history-order')].map(order=>order.dataset.orderId),['TEST-9201']);
  assert.equal(document.querySelector('[data-history-day]').dataset.historyDay,'2026-06-11');
  assert.match(document.querySelector('.history-order-head').textContent,/00:30/);
+});
+
+
+test('manual basket selection is explicit and totals only existing selected lines',async()=>{
+ const {parseHTML}=await import('linkedom'),products=seedWorkspace().products,basket=[{...products[0],quantity:2,price:1.5},{...products[1],quantity:3,price:2}],state={basket,orders:[]};
+ const render=selected=>parseHTML(renderManualItems(state,{tab:'basket',selected})).document;
+ const none=render(new Set());assert.equal(none.querySelectorAll('[data-manual-basket-select][checked]').length,0);assert.equal(none.querySelector('[data-action="manual-basket-submit"]').disabled,true);assert.match(none.querySelector('.manual-basket-footer').textContent,/0 selected lines.*£0.00/);assert.equal(none.querySelector('[data-action="manual-basket-select-all"]').getAttribute('aria-pressed'),'false');
+ const one=render(new Set([basket[0].id,'removed-id']));assert.equal(one.querySelectorAll('[data-manual-basket-select][checked]').length,1);assert.equal(one.querySelector('[data-action="manual-basket-submit"]').textContent,'Send selected (1)');assert.equal(one.querySelector('[data-action="manual-basket-submit"]').disabled,false);assert.match(one.querySelector('.manual-basket-footer').textContent,/1 selected line.*£3.00/);assert.equal(one.querySelector('[data-action="manual-basket-select-all"]').getAttribute('aria-pressed'),'mixed');assert.equal(one.querySelectorAll('tr.is-selected').length,1);
+ const all=render(new Set(basket.map(item=>item.id)));assert.equal(all.querySelectorAll('[data-manual-basket-select][checked]').length,2);assert.match(all.querySelector('.manual-basket-footer').textContent,/2 selected lines.*£9.00/);assert.equal(all.querySelector('[data-action="manual-basket-select-all"]').getAttribute('aria-pressed'),'true');assert.match(all.querySelector('[data-action="manual-basket-select-all"]').textContent,/Clear selection/);
+ const defaultSelection=parseHTML(renderManualItems(state,{tab:'basket'})).document;assert.equal(defaultSelection.querySelector('[data-action="manual-basket-submit"]').disabled,true,'Missing selections never imply sending the whole basket');
 });
