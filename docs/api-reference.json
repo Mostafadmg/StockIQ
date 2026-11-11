@@ -495,5 +495,28 @@
       "path": "/api/support",
       "purpose": "Workspace-only notes; no message to external support"
     }
-  ]
+  ],
+  "directManualOrders": {
+    "method": "POST",
+    "path": "/api/orders/direct",
+    "body": {
+      "productId": "canonical workspace product id",
+      "quantity": 2,
+      "supplier": "AAH",
+      "notes": "Optional order note",
+      "requestId": "per-attempt UUID retained for retries"
+    },
+    "result": "data.order, data.simulated true, data.replayed, data.message",
+    "status": {
+      "201": "Single-line test order created",
+      "200": "Existing matching request result replayed",
+      "409": "Request identity reused with a different normalized payload"
+    },
+    "invariants": [
+      "Existing basket is not submitted or modified",
+      "Shelf stock is unchanged until receiving",
+      "Only the chosen product and quantity are ordered",
+      "No real supplier endpoint is called"
+    ]
+  }
 }

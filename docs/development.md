@@ -18,7 +18,8 @@ The local app runs at http://localhost:3000. `PORT` selects another loopback por
 | `src/app.js` | Application shell, routing, workspace snapshot, core basket/receipt dialogs and events |
 | `src/views.js` | Page markup and derived read models for tabs and subviews |
 | `src/parity-actions.js` | Delivery vans, Fast Lines, reviews, claims, waste, support, surplus and cascade interactions |
-| `src/manual-search.js` | Accessible dm+d medicine/pack picker |
+| `src/manual-search.js` | Accessible dm+d picker and item-order modal, success/error/retry states |
+| `src/manual-orders.js` | Separate direct-send and basket API paths; updates totals without destroying the modal |
 | `src/parity.css` | Original shell, dense controls, tables, responsive/dark styles |
 | `src/parity-views.css` | Original page-specific layouts |
 | `src/styles.css`, `src/views.css`, `src/manual-search.css` | Base styles beneath the parity layers |
@@ -35,3 +36,5 @@ Workspace version1 snapshots remain backward-compatible. New optional `features`
 For stateless hosting the browser sends `POST /api/dispatch` with `{id,workspace,method,path,data}`. The server restores and validates the snapshot, performs one logical local API call, and returns its status/data/workspace. GET results do not overwrite newer browser state. Direct REST routes remain available for local development. Do not introduce calls to the original ordering system while wiring production adapters.
 
 The source is published to the owner's StockIQ GitHub repository. Sites hosting uses the separate repository credential and the exact same authored source commit/artifact. Runtime credentials, browser profiles and the TRUD key must never enter source control.
+
+Direct item submission uses `POST /api/orders/direct` with `{productId,quantity,supplier,notes,requestId}`. It creates one line and leaves the basket and shelf stock untouched. A repeated request ID with the same normalized payload replays its existing result; changed payloads require a new request ID. This retry protection is scoped to the browser workspace snapshot. The modal retains its key after an error and prevents duplicate clicks. Direct orders appear in History and Goods In alongside basket orders.

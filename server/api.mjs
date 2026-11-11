@@ -55,6 +55,7 @@ export function seedWorkspace() {
 function fail(message,status=400,code) { const err = new Error(message);err.status=status;err.code=code;throw err; }
 function integer(value,min=1,max=999,label='Quantity') { if (!Number.isInteger(value)||value<min||value>max) fail(`${label} must be a whole number between ${min} and ${max}.`);return value; }
 function string(value,max=500,label='Value') { if(typeof value!=='string'||!value.trim()||value.trim().length>max) fail(`${label} is required and must be at most ${max} characters.`);return value.trim(); }
+function directRequestId(value){if(typeof value!=='string'||!/^[A-Za-z0-9-]{8,80}$/.test(value))fail('Request ID must contain 8–80 letters, numbers or hyphens.');return value;}
 function validDate(value){return typeof value==='string'&&value.length<50&&Number.isFinite(Date.parse(value));}
 function product(w,id) { const p=w.products.find(p=>p.id===id);if(!p)fail('Product not found.',404);return p; }
 function order(w,id) { const o=w.orders.find(o=>o.id===id);if(!o)fail('Order not found.',404);return o; }
@@ -201,13 +202,14 @@ async function restoreWorkspace(input) {
   }
   function records(key){if(!Array.isArray(input[key])||input[key].length>MAX_RECORDS)fail(`Invalid snapshot ${key}.`);return input[key];}
   w.basket=items(input.basket);
-  const orderIds=new Set();
+  const orderIds=new Set(),requestIds=new Set();
   w.orders=records('orders').map(o=>{
     if(!o||!/^TEST-\d{4,9}$/.test(o.id)||orderIds.has(o.id))fail('Invalid snapshot order.');orderIds.add(o.id);
     const lines=items(o.items);if(!lines.length)fail('Snapshot orders need items.');
     const status=lines.every(i=>i.received===i.quantity)?'Received':lines.some(i=>i.received>0)?'Part received':'Awaiting';
     if(!validDate(o.createdAt))fail('Invalid snapshot order date.');
-    return {id:o.id,items:lines,total:total(lines),status,supplier:suppliers.includes(o.supplier)?o.supplier:'Phoenix',createdAt:o.createdAt,source:o.source==='auto'?'auto':'manual',notes:typeof o.notes==='string'?o.notes.slice(0,500):'',...(validDate(o.receivedAt)?{receivedAt:o.receivedAt}:{}),...(o.invoice?{invoice:optionalText(o.invoice,80,'Invoice reference')}:{})};
+    if(o.requestId!==undefined){directRequestId(o.requestId);if(requestIds.has(o.requestId))fail('Snapshot orders contain duplicate request IDs.');requestIds.add(o.requestId);}
+    return {id:o.id,items:lines,total:total(lines),status,supplier:suppliers.includes(o.supplier)?o.supplier:'Phoenix',createdAt:o.createdAt,source:o.source==='auto'?'auto':'manual',notes:typeof o.notes==='string'?o.notes.slice(0,500):'',...(o.requestId!==undefined?{requestId:o.requestId}:{}),...(validDate(o.receivedAt)?{receivedAt:o.receivedAt}:{}),...(o.invoice?{invoice:optionalText(o.invoice,80,'Invoice reference')}:{})};
   });
   const draftIds=new Set();w.drafts=records('drafts').map(d=>{if(!d||!/^DRAFT-\d{4,9}$/.test(d.id)||draftIds.has(d.id)||!validDate(d.createdAt))fail('Invalid snapshot draft.');draftIds.add(d.id);return {id:d.id,name:string(d.name,80,'Draft name'),items:items(d.items),createdAt:d.createdAt};});
   const claimIds=new Set();w.claims=records('claims').map(c=>{if(!c||!/^CLAIM-\d{4,9}$/.test(c.id)||claimIds.has(c.id)||!orderIds.has(c.orderId)||!validDate(c.createdAt))fail('Invalid snapshot claim.');claimIds.add(c.id);return {id:c.id,orderId:c.orderId,reason:string(c.reason,500,'Claim reason'),quantity:integer(c.quantity),status:['Open','Resolved','draft','submitted','acknowledged','resolved','disputed'].includes(c.status)?c.status:'Open',credit:typeof c.credit==='number'&&Number.isFinite(c.credit)&&c.credit>=0&&c.credit<=1000000?money(c.credit):0,createdAt:c.createdAt};});
@@ -343,6 +345,20 @@ export async function handleApi(request,env={}) {
       const i=w.basket.find(i=>i.id===basketMatch[1]);if(!i)fail('Basket item not found.',404);
       if(method==='DELETE')w.basket=w.basket.filter(x=>x.id!==i.id);else i.quantity=integer((await body(request)).quantity);
       return reply({items:w.basket,total:total(w.basket),count:w.basket.reduce((n,i)=>n+i.quantity,0)},200,w);
+    }
+    if(path==='/api/orders/direct'&&method==='POST'){
+      const data=featureObject(await body(request),'Direct order',['productId','quantity','supplier','notes','requestId']);
+      const p=product(w,data.productId),quantity=integer(data.quantity),requestId=directRequestId(data.requestId),notes=optionalText(data.notes,500,'Notes');
+      if(!suppliers.includes(data.supplier))fail('Choose a known test supplier.');
+      const existing=w.orders.find(o=>o.requestId===requestId);
+      if(existing){
+        if(existing.items.length!==1||existing.items[0].id!==p.id||existing.items[0].quantity!==quantity||existing.supplier!==data.supplier||existing.notes!==notes)fail('This request ID was already used for a different test order.',409,'DIRECT_ORDER_CONFLICT');
+        return reply({order:existing,simulated:true,replayed:true,message:'This test order was already accepted. No duplicate order was created.'},200,w);
+      }
+      capacity(w.orders,'Order');
+      const items=[{...copy(p),quantity,received:0}],o={id:nextId(w.orders,'TEST'),supplier:data.supplier,items,total:total(items),status:'Awaiting',createdAt:iso(),source:'manual',notes,requestId};
+      w.orders.unshift(o);
+      return reply({order:o,simulated:true,replayed:false,message:'Test order accepted. Awaiting delivery; no supplier submission was made.'},201,w);
     }
     if(path==='/api/orders'&&method==='GET')return reply(w.orders.filter(o=>!url.searchParams.get('status')||o.status===url.searchParams.get('status')),200,w);
     if(path==='/api/orders'&&method==='POST'){

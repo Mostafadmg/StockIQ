@@ -14,6 +14,8 @@ const assets={
  '/stockiq-logo.svg':{type:'image/svg+xml',body:await read('src/stockiq-logo.svg')},
  '/styles.css':{type:'text/css; charset=utf-8',body:await read('src/styles.css')},
  '/app.js':{type:'text/javascript; charset=utf-8',body:await read('src/app.js')},
+ '/manual-orders.js':{type:'text/javascript; charset=utf-8',body:await read('src/manual-orders.js')},
+ '/manual-order.css':{type:'text/css; charset=utf-8',body:await read('src/manual-order.css')},
  '/manual-search.js':{type:'text/javascript; charset=utf-8',body:await read('src/manual-search.js')},
  '/manual-search.css':{type:'text/css; charset=utf-8',body:await read('src/manual-search.css')},
  '/views.css':{type:'text/css; charset=utf-8',body:await read('src/views.css')},
@@ -23,7 +25,7 @@ const assets={
 };
 // The source ZIP is generated on download. This keeps only one copy of the
 // reference catalogue in the Worker rather than embedding another base64 ZIP.
-const sourceFiles=['.gitignore','.openai/hosting.json','README.md','package.json','scripts/build.mjs','scripts/prepare-dmd.py','.github/workflows/ci.yml','server/api.mjs','server/dmd.mjs','server/dmd-local.mjs','server/local.mjs','src/index.html','src/app.js','src/icons.js','src/stockiq-logo.svg','src/parity.css','src/parity-views.css','src/parity-actions.js','src/manual-search.js','src/manual-search.css','src/views.js','src/styles.css','src/views.css','docs/api-reference.json','docs/feature-coverage.md','docs/parity.md','docs/development.md','data/dmd-release.json','tests/api.test.mjs','tests/views.test.mjs','tests/worker.test.mjs','tests/catalogue.test.mjs','tests/manual-search.test.mjs','tests/dmd-local.test.mjs','tests/features.test.mjs','tests/parity-actions.test.mjs'];
+const sourceFiles=['.gitignore','.openai/hosting.json','README.md','package.json','scripts/build.mjs','scripts/prepare-dmd.py','.github/workflows/ci.yml','server/api.mjs','server/dmd.mjs','server/dmd-local.mjs','server/local.mjs','src/index.html','src/app.js','src/icons.js','src/stockiq-logo.svg','src/parity.css','src/parity-views.css','src/parity-actions.js','src/manual-search.js','src/manual-orders.js','src/manual-order.css','src/manual-search.css','src/views.js','src/styles.css','src/views.css','docs/api-reference.json','docs/feature-coverage.md','docs/parity.md','docs/development.md','data/dmd-release.json','tests/api.test.mjs','tests/views.test.mjs','tests/worker.test.mjs','tests/catalogue.test.mjs','tests/manual-search.test.mjs','tests/dmd-local.test.mjs','tests/features.test.mjs','tests/parity-actions.test.mjs','tests/direct-order.test.mjs','tests/manual-orders.test.mjs'];
 const sourceEntries={};for(const file of sourceFiles)sourceEntries['stockiq/'+file]=await read(file);
 const data=JSON.parse(await read('data/dmd-catalogue.json'));
 const stripExports=s=>s.replace(/export\s+(?=(?:async\s+)?function|const |let |class )/g,'');
