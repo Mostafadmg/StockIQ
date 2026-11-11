@@ -1,3 +1,4 @@
+import {searchLocalDmd,getLocalDmdPack,dmdCatalogueStatus} from './dmd-local.mjs';
 /** Read-only adapter for the existing Mellons Drug Tariff edge function.
  * The upstream does not return dm+d/SNOMED ids. Internal TARIFF hashes identify
  * name/brand/pack combinations only. No supplier or reference-table writes.
@@ -23,7 +24,7 @@ async function normalizeTariffRow(row){
   return {id:await tariffPackId(name,brand,pack),type:'TARIFF',name,pack,brand,referencePrice,tariffMonth:typeof row.tariff_month==='string'?row.tariff_month.slice(0,40):'',source:'NHS Drug Tariff'};
 }
 export async function searchDmd(query,env={}){
-  const term=catalogueHint(query),config=catalogueConfig(env),cacheKey=config.origin+'|'+term.toLowerCase(),now=Date.now();
+  const term=catalogueHint(query);if(Array.isArray(env.DMD_DATA)||!env.DMD_FETCH)return searchLocalDmd(term,env);const config=catalogueConfig(env),cacheKey=config.origin+'|'+term.toLowerCase(),now=Date.now();
   const cached=queryCache.get(cacheKey);if(cached&&cached.expires>now)return structuredClone(cached.data);
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
   let response;
@@ -44,10 +45,12 @@ export async function searchDmd(query,env={}){
   finally{clearTimeout(timer);}
 }
 export async function getDmdPack(id,type,env={},queryHint){
+  if(['AMPP','VMPP'].includes(type))return getLocalDmdPack(id,type,env);
   if(type!=='TARIFF'||typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id))throw catalogueError('Choose a valid catalogue pack.',400,'INVALID_CATALOGUE_SELECTION');
   const config=catalogueConfig(env),key=config.origin+'|'+id,entry=catalogueRows.get(key);
   if(entry?.expires>Date.now())return structuredClone(entry.pack);
   if(queryHint){const result=await searchDmd(catalogueHint(queryHint),env);const row=result.matches.find(row=>row.id===id);if(row)return row;}
   throw catalogueError('This catalogue selection has expired. Search again and select its pack.',409,'CATALOGUE_SELECTION_EXPIRED');
 }
-export async function getDmdPacks(id,type,env={},queryHint){return {packs:[await getDmdPack(id,type,env,queryHint)],source:'NHS Drug Tariff',referenceOnly:true};}
+export async function getDmdPacks(id,type,env={},queryHint){const pack=await getDmdPack(id,type,env,queryHint);return {packs:[pack],source:pack.source,releaseDate:pack.releaseDate,referenceOnly:true};}
+export {dmdCatalogueStatus};

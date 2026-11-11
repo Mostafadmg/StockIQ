@@ -1,4 +1,5 @@
 import {readFile,writeFile,mkdir,rm} from 'node:fs/promises';
+import {gzipSync} from 'node:zlib';
 const root=new URL('../',import.meta.url);
 const read=p=>readFile(new URL(p,root),'utf8');
 await rm(new URL('dist',root),{recursive:true,force:true});
@@ -15,16 +16,25 @@ const assets={
  '/favicon.svg':{type:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="13" fill="#242231"/><path d="M13 28h7V16h7v16h7" stroke="#b69aff" stroke-width="5" fill="none"/><circle cx="32" cy="15" r="4" fill="#81dcc0"/></svg>'},
  '/api-reference.json':{type:'application/json',body:await read('docs/api-reference.json')}
 };
-// A portable ZIP download containing authored source only (no browser state or credentials).
-const sourceFiles=['.gitignore','.openai/hosting.json','README.md','package.json','scripts/build.mjs','server/api.mjs','server/dmd.mjs','server/local.mjs','src/index.html','src/app.js','src/manual-search.js','src/manual-search.css','src/views.js','src/styles.css','src/views.css','docs/api-reference.json','docs/feature-coverage.md','tests/api.test.mjs','tests/views.test.mjs','tests/worker.test.mjs','tests/catalogue.test.mjs','tests/manual-search.test.mjs'];
-const localParts=[],centralParts=[];let offset=0;
-const crc32=bytes=>{let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let j=0;j<8;j++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
-for(const file of sourceFiles){const name=Buffer.from('stockiq/'+file),data=Buffer.from(await read(file)),crc=crc32(data);const local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt32LE(crc,14);local.writeUInt32LE(data.length,18);local.writeUInt32LE(data.length,22);local.writeUInt16LE(name.length,26);localParts.push(local,name,data);const central=Buffer.alloc(46);central.writeUInt32LE(0x02014b50,0);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);central.writeUInt32LE(crc,16);central.writeUInt32LE(data.length,20);central.writeUInt32LE(data.length,24);central.writeUInt16LE(name.length,28);central.writeUInt32LE(offset,42);centralParts.push(central,name);offset+=local.length+name.length+data.length;}
-const central=Buffer.concat(centralParts),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(sourceFiles.length,8);end.writeUInt16LE(sourceFiles.length,10);end.writeUInt32LE(central.length,12);end.writeUInt32LE(offset,16);
-assets['/source.zip']={type:'application/zip',base64:Buffer.concat([...localParts,central,end]).toString('base64')};
-const provider=(await read('server/dmd.mjs')).replace(/export\s+(?=(?:async\s+)?function|const |let |class )/g,'');
-const api=(await read('server/api.mjs')).replace(/^import .*from '\.\/dmd\.mjs';\n/m,'').replace(/export\s+(?=(?:async\s+)?function|const |let |class )/g,'');
-const worker=`${provider}\n${api}\nconst ASSETS=${JSON.stringify(assets)};\nexport default {async fetch(request,env,ctx){const path=new URL(request.url).pathname;if(path.startsWith('/api/'))return await handleApi(request,env);const asset=ASSETS[path]||(path.includes('.')?null:ASSETS['/']);if(!asset)return new Response('Not found',{status:404});return new Response(request.method==='HEAD'?null:asset.base64?Uint8Array.from(atob(asset.base64),c=>c.charCodeAt(0)):asset.body,{headers:{'Content-Type':asset.type,...(asset.base64?{'Content-Disposition':'attachment; filename=stockiq-source.zip'}:{}),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Content-Security-Policy':\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\"}})}};\n`;
+// The source ZIP is generated on download. This keeps only one copy of the
+// reference catalogue in the Worker rather than embedding another base64 ZIP.
+const sourceFiles=['.gitignore','.openai/hosting.json','README.md','package.json','scripts/build.mjs','scripts/prepare-dmd.py','server/api.mjs','server/dmd.mjs','server/dmd-local.mjs','server/local.mjs','src/index.html','src/app.js','src/manual-search.js','src/manual-search.css','src/views.js','src/styles.css','src/views.css','docs/api-reference.json','docs/feature-coverage.md','data/dmd-release.json','tests/api.test.mjs','tests/views.test.mjs','tests/worker.test.mjs','tests/catalogue.test.mjs','tests/manual-search.test.mjs','tests/dmd-local.test.mjs'];
+const sourceEntries={};for(const file of sourceFiles)sourceEntries['stockiq/'+file]=await read(file);
+const data=JSON.parse(await read('data/dmd-catalogue.json'));
+const stripExports=s=>s.replace(/export\s+(?=(?:async\s+)?function|const |let |class )/g,'');
+const local=stripExports((await read('server/dmd-local.mjs')).replace(/^import localCatalogue .*?;\n/m,''));
+const provider=stripExports((await read('server/dmd.mjs')).replace(/^import .*?from '\.\/dmd-local\.mjs';\n/m,'').replace(/^export \{dmdCatalogueStatus\};?\n?/m,''));
+const api=stripExports((await read('server/api.mjs')).replace(/^import .*?from '\.\/dmd\.mjs';\n/m,''));
+const zipHelper=String.raw`
+function sourceZipBytes(){
+ const entries={...SOURCE_ENTRIES,'stockiq/data/dmd-catalogue.json':JSON.stringify(localCatalogue)};
+ const encoder=new TextEncoder(),parts=[],central=[];let offset=0,count=0;
+ const crc32=bytes=>{let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let j=0;j<8;j++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
+ const record=size=>{const bytes=new Uint8Array(size);return {bytes,view:new DataView(bytes.buffer)}};
+ for(const [path,text] of Object.entries(entries)){const name=encoder.encode(path),bytes=encoder.encode(text),crc=crc32(bytes),local=record(30),dir=record(46);local.view.setUint32(0,0x04034b50,true);local.view.setUint16(4,20,true);local.view.setUint32(14,crc,true);local.view.setUint32(18,bytes.length,true);local.view.setUint32(22,bytes.length,true);local.view.setUint16(26,name.length,true);parts.push(local.bytes,name,bytes);dir.view.setUint32(0,0x02014b50,true);dir.view.setUint16(4,20,true);dir.view.setUint16(6,20,true);dir.view.setUint32(16,crc,true);dir.view.setUint32(20,bytes.length,true);dir.view.setUint32(24,bytes.length,true);dir.view.setUint16(28,name.length,true);dir.view.setUint32(42,offset,true);central.push(dir.bytes,name);offset+=30+name.length+bytes.length;count++;}
+ const directorySize=central.reduce((n,b)=>n+b.length,0),end=record(22);end.view.setUint32(0,0x06054b50,true);end.view.setUint16(8,count,true);end.view.setUint16(10,count,true);end.view.setUint32(12,directorySize,true);end.view.setUint32(16,offset,true);const output=new Uint8Array(offset+directorySize+22);let pos=0;for(const bytes of [...parts,...central,end.bytes]){output.set(bytes,pos);pos+=bytes.length;}return output;
+}`;
+const worker=`const localCatalogue=${JSON.stringify(data)};\n${local}\n${provider}\n${api}\nconst ASSETS=${JSON.stringify(assets)};\nconst SOURCE_ENTRIES=${JSON.stringify(sourceEntries)};\n${zipHelper}\nexport default {async fetch(request,env,ctx){const path=new URL(request.url).pathname;if(path.startsWith('/api/'))return await handleApi(request,env);if(path==='/source.zip')return new Response(request.method==='HEAD'?null:sourceZipBytes(),{headers:{'Content-Type':'application/zip','Content-Disposition':'attachment; filename=stockiq-source.zip','Cache-Control':'no-store'}});const asset=ASSETS[path]||(path.includes('.')?null:ASSETS['/']);if(!asset)return new Response('Not found',{status:404});return new Response(request.method==='HEAD'?null:asset.body,{headers:{'Content-Type':asset.type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Content-Security-Policy':\"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'\"}})}};\n`;
 await writeFile(new URL('dist/server/index.js',root),worker);
 await writeFile(new URL('dist/.openai/hosting.json',root),await read('.openai/hosting.json'));
-console.log('Built StockIQ Worker and embedded assets; read-only catalogue adapter; ordering stays simulated.');
+console.log(`Built StockIQ Worker: ${(worker.length/1048576).toFixed(2)} MiB raw; ${(gzipSync(worker).length/1048576).toFixed(2)} MiB gzip. NHS dm+d ${data.releaseDate}; ${data.counts?.total||data.counts?.packs||''} packs. Orders remain simulated.`);

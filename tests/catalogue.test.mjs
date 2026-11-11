@@ -76,7 +76,6 @@ test('unknown reference identity does not insert a fabricated product',async()=>
 
 test('unavailable reference lookup reports an error instead of substituting the sample catalogue',async()=>{
   const c=client();await c.init();
-  const unconfigured=await c.request('GET','/api/dmd/search?q=metformin',undefined,{});assert.equal(unconfigured.status,503);assert.equal(unconfigured.code,'CATALOGUE_NOT_CONFIGURED');
   const failed=await c.request('GET','/api/dmd/search?q=network-failure',undefined,{...c.env,DMD_FETCH:async()=>{throw new Error('Network unreachable');}});assert.equal(failed.status,503);assert.equal(failed.code,'CATALOGUE_UNAVAILABLE');
   assert.equal((await c.request('GET','/api/products')).data.length,24);
 });
@@ -105,3 +104,34 @@ test('stateless dispatch validates snapshots, method, data and same-origin paths
   const tooLarge=await c.request('POST','/api/dispatch',{...valid,data:{notes:'x'.repeat(270000)}});assert.equal(tooLarge.status,413);
   assert.equal(c.calls.length,0);
 });
+
+// Representative pack records from the user's TRUD dm+d release, 2026-11-09.
+const realDmdRecords=[
+  {id:'41105411000001107',type:'AMPP',name:'#AOne Foam dressing (adhesive) 10cm x 10cm square (Regen Medical Ltd) 1 dressing',parentId:'41105111000001102',genericId:'1156011000001100',genericMedicineId:'3130311000001105',pack:'1 dressing',quantity:1,unit:'dressing',manufacturer:'Regen Medical Ltd',brand:'#AOne Foam dressing (adhesive) 10cm x 10cm square',referencePrice:0.61,priceSource:'dm+d list price',source:'NHS dm+d',releaseDate:'2026-11-09'},
+  {id:'1156011000001100',type:'VMPP',name:'Polyurethane foam film dressing sterile with adhesive border 10cm x 10cm square 1 dressing',parentId:'3130311000001105',genericId:'3130311000001105',pack:'1 dressing',quantity:1,unit:'dressing',source:'NHS dm+d',releaseDate:'2026-11-09'}
+];
+test('actual dm+d pack codes remain strings through import, test order and stock receipt',async()=>{
+  const c=client({DMD_DATA:realDmdRecords});await c.init();const row=realDmdRecords[0];
+  const imported=await c.request('POST','/api/catalogue/import',{id:row.id,type:row.type});assert.equal(imported.status,201);
+  const product=imported.data,key=`catalogue-AMPP-${row.id}`;assert.equal(product.id,key);assert.equal(product.catalogueId,row.id);assert.equal(product.dmdId,row.id);assert.equal(typeof product.dmdId,'string');assert.equal(product.dmdType,'AMPP');assert.equal(product.source,'NHS dm+d');
+  assert.equal(product.parentId,row.parentId);assert.equal(product.genericId,row.genericId);assert.equal(product.genericMedicineId,row.genericMedicineId);assert.equal(product.manufacturer,row.manufacturer);assert.equal(product.quantity,1);assert.equal(product.unit,'dressing');assert.equal(product.releaseDate,'2026-11-09');
+  assert.equal(product.referencePrice,.61);assert.equal(product.referencePriceSource,'dm+d list price');assert.equal(product.price,1);assert.equal(product.priceSource,'simulation');assert.equal(product.stock,0);
+  const byCode=await c.request('GET',`/api/products?q=${row.id}`);assert.equal(byCode.data[0].id,key);
+  await c.request('POST','/api/basket',{productId:key,quantity:3});const order=await c.request('POST','/api/orders',{notes:'Real dm+d identity, simulated ordering'});assert.equal(order.status,201);assert.equal(order.data.items[0].dmdId,row.id);assert.equal(order.data.total,3);
+  const received=await c.request('POST',`/api/orders/${order.data.id}/receive`,{});assert.equal(received.status,200);assert.equal(received.data.status,'Received');assert.equal(received.workspace.products.find(p=>p.id===key).stock,3);
+  const snapshot=structuredClone(received.workspace);snapshot.products.find(p=>p.id===key).price=999;snapshot.products.find(p=>p.id===key).priceSource='untrusted';
+  const fresh=client();const restored=await fresh.request('POST','/api/workspaces',{id:fresh.id,workspace:snapshot},{});assert.equal(restored.status,201);const p=restored.workspace.products.find(p=>p.id===key);assert.equal(p.price,1);assert.equal(p.priceSource,'simulation');assert.equal(p.referencePrice,.61);assert.equal(p.dmdId,row.id);assert.equal(p.stock,3);assert.equal(p.parentId,row.parentId);assert.equal(p.genericMedicineId,row.genericMedicineId);assert.equal(p.releaseDate,'2026-11-09');assert.equal(fresh.calls.length,0);
+  const generic=await c.request('POST','/api/catalogue/import',{id:realDmdRecords[1].id,type:'VMPP'});assert.equal(generic.status,201);assert.equal(generic.data.dmdType,'VMPP');assert.equal(generic.data.id,`catalogue-VMPP-${realDmdRecords[1].id}`);
+  assert.equal(c.calls.length,0,'The embedded dm+d catalogue and order workflow do not need upstream calls');
+});
+test('dm+d identities and restored relationship metadata reject malformed or lossy codes',async()=>{
+  const c=client({DMD_DATA:realDmdRecords});await c.init();
+  for(const data of [{id:41105411000001107,type:'AMPP'},{id:'41105',type:'AMPP'},{id:'1'.repeat(19),type:'AMPP'},{id:'000000',type:'AMPP'},{id:'41105411000001107',type:'AMP'},{id:'4e15',type:'VMPP'}])assert.equal((await c.request('POST','/api/catalogue/import',data)).status,400);
+  const imported=await c.request('POST','/api/catalogue/import',{id:realDmdRecords[0].id,type:'AMPP'});assert.equal(imported.status,201);const key=imported.data.id;
+  for(const changes of [{dmdId:'41105411000001108'},{dmdType:'VMPP'},{parentId:41105111000001102},{genericId:'not-a-code'},{genericMedicineId:'1'.repeat(19)},{quantity:0},{quantity:1e10},{releaseDate:'2026-99-99'},{unit:'x'.repeat(81)},{source:'NHS Drug Tariff'}]){
+    const snapshot=structuredClone(imported.workspace);Object.assign(snapshot.products.find(p=>p.id===key),changes);const fresh=client();const result=await fresh.request('POST','/api/workspaces',{id:fresh.id,workspace:snapshot},{});assert.equal(result.status,400,JSON.stringify(changes));
+  }
+});
+
+
+test('catalogue status identifies the loaded TRUD release without claiming supplier stock',async()=>{const c=client();await c.init();const status=await c.request('GET','/api/catalogue/status');assert.equal(status.status,200);assert.equal(status.data.source,'NHS dm+d');assert.equal(status.data.loaded,true);assert.equal(status.data.releaseDate,'2026-11-09');assert.equal(status.data.realSupplierStock,false);assert.ok(status.data.counts);});

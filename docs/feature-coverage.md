@@ -60,3 +60,8 @@ The repository is intended as a reviewable starting point. Production parity wou
 ## Mellons catalogue update
 
 Manual Orders now queries the same `search-drug-tariff` lookup used by the Mellons daily repository. The dropdown includes medicine name and pack size, selection, pack quantity, keyboard navigation, loading/error/empty states and real tariff reference prices. Added packs participate in basket, draft, test order, partial/full receiving, history and stock counts. Lookup is read-only; every order and stock write remains in the clone. The available lookup returns Drug Tariff records without dm+d/SNOMED identifiers; generated pack hashes are internal IDs. Wholesale prices and stock remain simulated. Source/API tests cover this flow; managed browser QA is unavailable in this session.
+
+
+## NHS TRUD dm+d release integration (supersedes the Mellons lookup dependency)
+
+The default Manual Orders dropdown now searches 145,806 active AMPP/VMPP packs from the verified 9 November 2026 NHS TRUD release. Actual identifier strings, quantities, units, brand/manufacturer, generic relations and available list/tariff prices are preserved. Discontinued/invalid records are excluded. Snapshot shards are bundled and searched without the unavailable Supabase project. The source ZIP includes these data files; the TRUD key is absent. Search, exact-pack selection, import, test basket/order, receiving and stock have automated coverage. Supplier ordering and stock remain simulated; no automatic reference-refresh schedule is configured.

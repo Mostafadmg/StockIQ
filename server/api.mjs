@@ -1,5 +1,5 @@
-/** StockIQ isolated ordering API. Only the reference catalogue is read remotely. */
-import {searchDmd,getDmdPacks,getDmdPack,tariffPackId} from './dmd.mjs';
+/** StockIQ isolated ordering API. Catalogue reads never place supplier orders. */
+import {searchDmd,getDmdPacks,getDmdPack,tariffPackId,dmdCatalogueStatus} from './dmd.mjs';
 const sessions = new Map();
 const MAX_SESSIONS = 160;
 const MAX_BODY = 256 * 1024;
@@ -61,14 +61,40 @@ function order(w,id) { const o=w.orders.find(o=>o.id===id);if(!o)fail('Order not
 function capacity(list,label){if(list.length>=MAX_RECORDS)fail(`${label} limit reached. Reset this test workspace to continue.`,409);}
 function nextId(list,prefix,start=1000){return `${prefix}-${Math.max(start,...list.map(x=>Number(x.id?.split('-').pop())||start))+1}`;}
 function catalogueIdentity(id,type) {
-  if(type!=='TARIFF'||typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id))fail('Choose a valid Drug Tariff pack from the reference search.');
+  const valid=typeof id==='string'&&(type==='TARIFF'?/^[a-f0-9]{32}$/.test(id):['AMPP','VMPP'].includes(type)&&/^[1-9][0-9]{5,17}$/.test(id));
+  if(!valid)fail('Choose a valid medicine pack from the reference search.');
   return {id,type};
+}
+function catalogueSource(type){return type==='TARIFF'?'NHS Drug Tariff':'NHS dm+d';}
+function catalogueMetadata(pack,result){
+  for(const key of ['parentId','genericId','genericMedicineId']){
+    if(pack[key]==null||pack[key]==='')continue;
+    if(typeof pack[key]!=='string'||!/^[1-9][0-9]{5,17}$/.test(pack[key]))fail(`Reference ${key} must be a decimal string code.`);
+    result[key]=pack[key];
+  }
+  for(const [key,max] of [['unit',80],['genericName',500],['manufacturer',200]]){
+    if(pack[key]==null||pack[key]==='')continue;
+    result[key]=string(pack[key],max,`Reference ${key}`);
+  }
+  if(pack.quantity!=null){
+    const value=pack.quantity;
+    if((typeof value!=='number'&&typeof value!=='string')||(typeof value==='string'&&(value.length>40||!/^\d+(?:\.\d+)?$/.test(value)))||!Number.isFinite(Number(value))||Number(value)<=0||Number(value)>1000000000)fail('Reference quantity is invalid.');
+    result.quantity=value;
+  }
+  if(pack.releaseDate!=null&&pack.releaseDate!==''){
+    if(typeof pack.releaseDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(pack.releaseDate)||!validDate(pack.releaseDate)||new Date(pack.releaseDate).toISOString().slice(0,10)!==pack.releaseDate)fail('Reference release date is invalid.');
+    result.releaseDate=pack.releaseDate;
+  }
+  const referencePriceSource=pack.referencePriceSource??pack.priceSource;
+  if(referencePriceSource!=null&&referencePriceSource!==''&&referencePriceSource!=='simulation')result.referencePriceSource=string(referencePriceSource,120,'Reference price source');
+  return result;
 }
 function catalogueProduct(pack,supplier='Phoenix') {
   if(!pack||typeof pack!=='object')fail('Reference pack is unavailable.',502);
   const {id,type}=catalogueIdentity(pack.id,pack.type);
   const name=string(pack.name,500,'Product name'),size=string(String(pack.pack??''),120,'Pack size');
-  const result={id:`catalogue-${type}-${id}`,catalogueId:id,catalogueType:type,name,pack:size,pip:'',price:1,priceSource:'simulation',stock:0,owed:0,supplier:suppliers.includes(supplier)?supplier:'Phoenix',category:'Prescription',fast:false,target:5,source:'NHS Drug Tariff'};
+  const result={id:`catalogue-${type}-${id}`,catalogueId:id,catalogueType:type,name,pack:size,pip:'',price:1,priceSource:'simulation',stock:0,owed:0,supplier:suppliers.includes(supplier)?supplier:'Phoenix',category:'Prescription',fast:false,target:5,source:catalogueSource(type)};
+  if(type!=='TARIFF'){result.dmdId=id;result.dmdType=type;catalogueMetadata(pack,result);}
   if(typeof pack.referencePrice==='number'&&Number.isFinite(pack.referencePrice)&&pack.referencePrice>=0&&pack.referencePrice<=100000)result.referencePrice=money(pack.referencePrice);
   if(typeof pack.tariffMonth==='string'&&pack.tariffMonth.length<=40)result.tariffMonth=pack.tariffMonth;
   if(typeof pack.brand==='string'&&pack.brand.length<=200)result.brand=pack.brand;
@@ -118,9 +144,10 @@ async function restoreWorkspace(input) {
     let original=PRODUCTS.find(o=>o.id===p.id);
     if(!original){
       const identity=catalogueIdentity(p.catalogueId,p.catalogueType);
-      if(p.id!==`catalogue-${identity.type}-${identity.id}`||p.source!=='NHS Drug Tariff')fail('Unknown snapshot product.');
-      original=catalogueProduct({id:identity.id,type:identity.type,name:p.name,pack:p.pack,referencePrice:p.referencePrice,tariffMonth:p.tariffMonth,brand:p.brand},p.supplier);
-      if(await tariffPackId(original.name,original.brand||'',original.pack)!==identity.id)fail('Snapshot reference product does not match its catalogue identity.');
+      if(p.id!==`catalogue-${identity.type}-${identity.id}`||p.source!==catalogueSource(identity.type))fail('Unknown snapshot product.');
+      if(identity.type!=='TARIFF'&&(p.dmdId!==identity.id||p.dmdType!==identity.type))fail('Snapshot dm+d fields do not match the catalogue identity.');
+      original=catalogueProduct({...p,id:identity.id,type:identity.type},p.supplier);
+      if(identity.type==='TARIFF'&&await tariffPackId(original.name,original.brand||'',original.pack)!==identity.id)fail('Snapshot reference product does not match its catalogue identity.');
     }
     return {...copy(original),stock:integer(p.stock,0,9999,'Stock'),owed:integer(p.owed,0,999,'Owed'),target:integer(p.target,0,999,'Target')};
   }));
@@ -190,9 +217,10 @@ export async function handleApi(request,env={}) {
     }
     const id=request.headers.get('x-workspace-id');const w=id&&sessions.get(id);
     if(!w)fail('Test workspace is not initialized. Restore or create it with POST /api/workspaces.',409,'SESSION_EXPIRED');
+    if(path==='/api/catalogue/status'&&method==='GET')return reply(dmdCatalogueStatus(),200,w);
     if(path==='/api/dmd/search'&&method==='GET'){
       const query=(url.searchParams.get('q')||'').trim();if(query.length>200)fail('Search must be at most 200 characters.');
-      return reply(query.length<2?{matches:[],source:'NHS Drug Tariff'}:await searchDmd(query,env),200,w);
+      return reply(query.length<2?{matches:[],source:'NHS dm+d'}:await searchDmd(query,env),200,w);
     }
     if(path==='/api/dmd/packs'&&method==='GET'){
       const reference=url.searchParams.get('id'),type=url.searchParams.get('type');catalogueIdentity(reference,type);
@@ -212,7 +240,7 @@ export async function handleApi(request,env={}) {
     if(path==='/api/reset'&&method==='POST'){const reset=seedWorkspace();sessions.set(id,reset);return reply({reset:true},200,reset);}
     if(path==='/api/products'&&method==='GET'){
       const q=(url.searchParams.get('q')||'').toLowerCase();const category=url.searchParams.get('category');const fast=url.searchParams.get('fast');
-      return reply(w.products.filter(p=>(!q||`${p.name} ${p.pip}`.toLowerCase().includes(q))&&(!category||p.category.toLowerCase()===category.toLowerCase())&&(fast!=='true'||p.fast)),200,w);
+      return reply(w.products.filter(p=>(!q||`${p.name} ${p.pip} ${p.catalogueId||''} ${p.genericName||''}`.toLowerCase().includes(q))&&(!category||p.category.toLowerCase()===category.toLowerCase())&&(fast!=='true'||p.fast)),200,w);
     }
     if(path==='/api/pending'&&method==='GET')return reply(w.products.filter(p=>p.stock<p.target||p.owed>0).map(p=>({...p,suggested:Math.max(1,p.target-p.stock,p.owed)})),200,w);
     if(path==='/api/basket'&&method==='GET')return reply({items:w.basket,total:total(w.basket),count:w.basket.reduce((n,i)=>n+i.quantity,0)},200,w);

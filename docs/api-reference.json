@@ -380,39 +380,43 @@
     }
   ],
   "catalogueIntegration": {
-    "source": "Existing Mellons search-drug-tariff edge function",
+    "source": "NHS TRUD item 24, release 2026-11-09",
+    "mode": "Bundled indexed release snapshot; no external lookup credentials required",
     "readOnly": true,
-    "identifierNotice": "TARIFF hashes are internal name/brand/pack identifiers, not dm+d/SNOMED codes",
-    "configuration": [
-      "MELLONS_SUPABASE_URL",
-      "MELLONS_SUPABASE_PUBLISHABLE_KEY"
+    "activePacks": 145806,
+    "types": [
+      "AMPP",
+      "VMPP"
     ],
+    "identifierNotice": "AMPP/VMPP identifiers are actual NHS decimal string codes. Legacy TARIFF hashes remain internal reference keys only.",
     "routes": [
       {
         "method": "GET",
-        "path": "/api/dmd/search?q=amoxicillin",
-        "returns": "data.matches with id,type TARIFF,name,pack,referencePrice GBP,tariffMonth"
+        "path": "/api/catalogue/status",
+        "returns": "releaseDate,counts,loaded,realSupplierStock false"
       },
       {
         "method": "GET",
-        "path": "/api/dmd/packs?id=:id&type=TARIFF&query=:name",
-        "returns": "data.packs for a selected reference pack"
+        "path": "/api/dmd/search?q=amoxicillin%20500",
+        "returns": "data.matches with real id,type,name,pack,manufacturer,genericName,referencePrice GBP,referencePriceSource,releaseDate"
+      },
+      {
+        "method": "GET",
+        "path": "/api/dmd/packs?id=:code&type=AMPP",
+        "returns": "data.packs for a current NHS pack"
       },
       {
         "method": "POST",
         "path": "/api/catalogue/import",
         "body": {
-          "id": "32-character reference hash",
-          "type": "TARIFF",
-          "query": "Canonical medicine name"
+          "id": "1477411000001105",
+          "type": "AMPP"
         },
-        "returns": "Validated reference product in workspace; simulated supplier price and stock"
+        "returns": "Validated reference product in workspace with separate simulated cost and shelf stock"
       }
     ],
-    "errors": {
-      "503": "Catalogue unconfigured, rejected read credentials, timeout or upstream unavailable",
-      "409": "Selection expired; reselect a medicine"
-    },
-    "writes": "Reference imports, baskets, orders and receiving mutate only the clone workspace"
+    "writes": "Only browser workspace reference imports, basket, order and receipt state changes; no supplier or original-stock writes",
+    "hosting": "POST /api/dispatch carries id,workspace snapshot,logical method,path,data; preserves logical statuses and returned workspace",
+    "security": "No TRUD key in code, browser or deployment; no live supplier calls"
   }
 }
