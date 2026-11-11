@@ -13,10 +13,11 @@ test('built Worker serves the app shell and every linked first-party asset',asyn
   const script=await fetchDraft('/app.js');assert.match(script.headers.get('content-type'),/javascript/);const source=await script.text();
   for(const title of ['Auto Orders','Manual Orders','Goods In','History','Advanced','Tools'])assert.ok(source.includes(title),`Main shell includes ${title}`);
   const views=await fetchDraft('/views.js');assert.equal(views.status,200);assert.match(views.headers.get('content-type'),/javascript/);assert.match(await views.text(),/export function renderView/);
+  const review=await fetchDraft('/basket-review.js');assert.equal(review.status,200);assert.match(review.headers.get('content-type'),/javascript/);assert.match(await review.text(),/export function renderBasketReview/);assert.ok(assets.includes('/basket-review.css'));
 });
 test('deep links serve the same shell; missing assets remain 404 and HEAD omits bodies',async()=>{
   const base=await (await fetchDraft('/')).text();
-  for(const path of ['/daily-orders','/goods-in/queue','/history','/advanced/analytics'])assert.equal(await (await fetchDraft(path)).text(),base);
+  for(const path of ['/daily-orders','/review','/goods-in/queue','/history','/advanced/analytics'])assert.equal(await (await fetchDraft(path)).text(),base);
   assert.equal((await fetchDraft('/missing.js')).status,404);
   const head=await fetchDraft('/styles.css',{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
 });

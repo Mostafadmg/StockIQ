@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseHTML} from 'linkedom';
+import {handleApi,seedWorkspace} from '../server/api.mjs';
+
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function until(check){for(let index=0;index<120;index++){if(check())return;await pause(15);}throw new Error('Expected basket UI did not appear.');}
+
+async function setup({path='/review#basket-ready',failFirstReview=false}={}){
+ const {window}=parseHTML('<html><body><div id="app"></div><div id="toast"></div><div id="overlay"></div></body></html>'),document=window.document;
+ let focused=document.body;Object.defineProperty(document,'activeElement',{configurable:true,get:()=>focused});window.HTMLElement.prototype.focus=function(){focused=this;};
+ Object.defineProperty(window.HTMLOptionElement.prototype,'selected',{configurable:true,get(){return this.hasAttribute('selected');},set(value){this.toggleAttribute('selected',!!value);}});
+ Object.defineProperty(window.HTMLSelectElement.prototype,'value',{configurable:true,get(){const option=this.querySelector('option[selected]')||this.querySelector('option');return option?.getAttribute('value')??option?.textContent??'';},set(value){for(const option of this.querySelectorAll('option'))option.selected=(option.getAttribute('value')??option.textContent)===String(value);}});
+ const url=new URL(path,'https://basket-ui.test'),workspace=seedWorkspace(),storage=new Map(),calls=[],intervals=[],timeouts=[];
+ workspace.basket=[['p001',2],['p003',3],['p009',1]].map(([id,quantity])=>({...workspace.products.find(product=>product.id===id),quantity,received:0}));
+ storage.set('stockiq.test-workspace.v1',JSON.stringify({id:'basket-ui-'+crypto.randomUUID(),workspace}));
+ const original={window:globalThis.window,document:globalThis.document,location:globalThis.location,history:globalThis.history,localStorage:globalThis.localStorage,CSS:globalThis.CSS,fetch:globalThis.fetch,setInterval:globalThis.setInterval,setTimeout:globalThis.setTimeout};
+ globalThis.window=window;globalThis.document=document;globalThis.location=url;globalThis.history={pushState(_state,_title,next){url.href=new URL(next,url).href;},replaceState(_state,_title,next){url.href=new URL(next,url).href;}};
+ globalThis.localStorage={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,String(value))};globalThis.CSS={escape:value=>String(value)};window.scrollTo=()=>{};
+ globalThis.setInterval=(...args)=>{const timer=original.setInterval(...args);timer.unref();intervals.push(timer);return timer;};
+ globalThis.setTimeout=(...args)=>{const timer=original.setTimeout(...args);timeouts.push(timer);return timer;};
+ let failed=false;
+ globalThis.fetch=(path,options={})=>{
+  assert.ok(String(path).startsWith('/api/'),'The app only calls its own sandbox API');
+  if(path==='/api/dispatch'){
+   const envelope=JSON.parse(options.body);calls.push({method:envelope.method,path:envelope.path,data:envelope.data});
+   if(failFirstReview&&!failed&&envelope.path==='/api/basket/cascade'){failed=true;return Promise.resolve(Response.json({error:'Test preview unavailable'},{status:503}));}
+  }
+  return handleApi(new Request(new URL(path,url),options));
+ };
+ const emit=(selector,type='click',values={})=>{const target=typeof selector==='string'?document.querySelector(selector):selector;assert.ok(target,'Control exists: '+selector);const event=new window.Event(type,{bubbles:true,cancelable:true});for(const [key,value] of Object.entries(values))Object.defineProperty(event,key,{value});target.dispatchEvent(event);return target;};
+ const snapshot=()=>JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace;
+ const ready=()=>until(()=>document.querySelector('.basket-review-page')&&!document.querySelector('.basket-submit')?.disabled);
+ await import('../src/app.js?basket-dom-'+crypto.randomUUID());await until(()=>document.querySelector('.basket-review-page'));
+ return {document,url,calls,emit,snapshot,ready,initial:workspace,cleanup(){for(const timer of intervals)clearInterval(timer);for(const timer of timeouts)clearTimeout(timer);for(const [key,value] of Object.entries(original))globalThis[key]=value;}};
+}
+
+test('full order review routes, edits, drafts and selected submission stay in the isolated basket workflow',async()=>{
+ const c=await setup();try{
+  await c.ready();assert.equal(c.url.pathname,'/review');assert.equal(c.document.title,'Order review · StockIQ Ordering');assert.ok(c.document.querySelector('.basket-trigger.active[aria-current="page"][data-basket-active]'));assert.equal(c.document.querySelector('[data-sort="name"]').getAttribute('aria-pressed'),'true');c.emit('[data-sort="unitPrice"]');assert.match(c.document.querySelector('[data-sort="unitPrice"]').textContent,/↓/);c.emit('[data-sort="unitPrice"]');assert.doesNotMatch(c.document.querySelector('[data-sort="unitPrice"]').textContent,/↓/);const mobileSort=c.document.querySelector('[data-review-sort]');mobileSort.value='lineTotal';c.emit(mobileSort,'change');assert.match(c.document.querySelector('[data-sort="lineTotal"]').textContent,/↓/);assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);assert.equal(c.snapshot().orders.length,c.initial.orders.length);assert.equal(c.calls.filter(call=>call.path==='/api/orders/cascade').length,0);assert.equal(c.document.querySelectorAll('[data-review-select]:checked').length,0);
+  c.emit('[data-action="basket-back"]');assert.equal(c.url.pathname,'/');assert.ok(c.document.querySelector('.view-auto'));c.emit('.basket-trigger');await c.ready();
+  const note=c.document.querySelector('[data-basket-notes]');note.value='Keep this note while editing';c.emit(note,'input');c.emit('[data-action="basket-sort"][data-sort="name"]');assert.equal(c.document.querySelector('[data-basket-notes]').value,note.value);
+  const quantity=c.document.querySelector('[data-basket-qty="p001"]');quantity.value='5';c.emit(quantity,'change');await until(()=>c.snapshot().basket.find(line=>line.id==='p001').quantity===5);await c.ready();assert.equal(c.document.querySelector('[data-basket-notes]').value,note.value);assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);
+  const invalid=c.document.querySelector('[data-basket-qty="p001"]');invalid.value='-1';c.emit(invalid,'change');await until(()=>c.document.querySelector('.basket-review-error'));assert.equal(c.snapshot().basket.find(line=>line.id==='p001').quantity,5);assert.match(c.document.querySelector('.basket-review-error').textContent,/whole number/);c.emit('.basket-review-error [data-action="review-cascade"]');await c.ready();
+  const zero=c.document.querySelector('[data-basket-qty="p009"]');zero.value='0';c.emit(zero,'change');await until(()=>!c.snapshot().basket.some(line=>line.id==='p009'));await c.ready();assert.equal(c.document.querySelector('[data-basket-item-id="p009"]'),null);
+  const supplierButton=c.document.querySelector('[data-action="basket-supplier-options"][data-id="p001"]');supplierButton.focus();c.emit(supplierButton);assert.ok(c.document.querySelector('#overlay .basket-supplier-sheet'));assert.equal(c.document.querySelector('#app').inert,true);const useButton=c.document.querySelector('.basket-supplier-use');useButton.focus();c.emit(useButton,'keydown',{key:'Tab'});assert.equal(c.document.activeElement,c.document.querySelector('#overlay button'));c.emit(useButton,'keydown',{key:'Escape'});assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);assert.ok(!c.document.querySelector('#app').inert);assert.equal(c.document.activeElement,supplierButton);c.emit(supplierButton);const alternative=c.document.querySelector('[name="basket-supplier-option"][value="AAH"]');assert.ok(alternative);for(const radio of c.document.querySelectorAll('[name="basket-supplier-option"]')){radio.checked=radio===alternative;radio.toggleAttribute('checked',radio===alternative);}c.emit(alternative,'change');assert.match(c.document.querySelector('.basket-supplier-use').textContent,/Use AAH/);c.emit('[data-action="basket-choose-supplier"]');await until(()=>c.snapshot().basket.find(line=>line.id==='p001').supplier==='AAH');await c.ready();assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);assert.equal(c.url.pathname,'/review');assert.equal(c.snapshot().orders.length,c.initial.orders.length);
+  window.prompt=(message,suggestion)=>{assert.equal(message,'Name this draft');assert.match(suggestion,/^Draft /);return 'Review draft';};c.emit('[data-action="save-draft"]');await until(()=>c.snapshot().drafts[0].name==='Review draft');await c.ready();assert.equal(c.url.pathname,'/review');assert.equal(c.snapshot().drafts[0].name,'Review draft');assert.equal(c.document.querySelector('[data-basket-notes]').value,note.value);
+  c.emit('[data-nav="manual"]');const next=c.document.querySelector('.continue-button');assert.match(next.textContent,/Continue/);c.emit(next);await c.ready();assert.equal(c.url.pathname,'/review');assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);c.emit('[data-action="basket-back"]');assert.equal(c.url.pathname,'/daily-orders');c.emit('.basket-trigger');await c.ready();
+  c.emit('[data-menu="Tools"]');c.emit('[data-nav="drafts"]');const draftId=c.snapshot().drafts[0].id;c.emit(`[data-action="restore-draft"][data-id="${draftId}"]`);await c.ready();assert.equal(c.url.pathname,'/review');assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);
+  const checked=c.document.querySelector('[data-review-select="p001"]');checked.checked=true;c.emit(checked,'change');assert.match(c.document.querySelector('.basket-submit').textContent,/Submit the 1 selected line only/);const before=c.snapshot(),send=c.document.querySelector('.basket-submit');c.emit(send);c.emit(send);await until(()=>c.document.querySelector('#overlay [role="dialog"]')?.textContent.includes('Test order results'));
+  const after=c.snapshot(),newOrder=after.orders.find(order=>!before.orders.some(previous=>previous.id===order.id));assert.ok(newOrder);assert.equal(newOrder.supplier,'AAH');assert.equal(newOrder.notes,note.value);assert.deepEqual(newOrder.items.map(line=>[line.id,line.quantity]),[['p001',5]]);assert.deepEqual(after.basket.map(line=>[line.id,line.quantity]),[['p003',3]]);assert.equal(c.calls.filter(call=>call.path==='/api/orders/cascade').length,1);assert.deepEqual(after.products.map(line=>[line.id,line.stock]),before.products.map(line=>[line.id,line.stock]));
+ }finally{c.cleanup();}
+});
+
+test('a failed review preview is inline and retry never submits or changes basket state',async()=>{
+ const c=await setup({failFirstReview:true});try{
+  await until(()=>c.document.querySelector('.basket-review-error'));assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);assert.match(c.document.querySelector('.basket-review-error').textContent,/Test preview unavailable/);assert.equal(c.document.querySelector('.basket-submit').disabled,true);c.emit('.basket-submit');await pause(0);assert.equal(c.calls.filter(call=>call.path==='/api/orders/cascade').length,0);assert.deepEqual(c.snapshot().basket,c.initial.basket);c.emit('.basket-review-error [data-action="review-cascade"]');await c.ready();assert.equal(c.document.querySelector('.basket-review-error'),null);assert.equal(c.calls.filter(call=>call.path==='/api/orders/cascade').length,0);assert.equal(c.snapshot().orders.length,c.initial.orders.length);
+  const draftsBefore=c.snapshot().drafts.length;window.prompt=()=>null;c.emit('[data-action="save-draft"]');await pause(10);assert.equal(c.snapshot().drafts.length,draftsBefore);let suggested;window.prompt=(_message,suggestion)=>{suggested=suggestion;return '   ';};c.emit('[data-action="save-draft"]');await until(()=>c.snapshot().drafts.length===draftsBefore+1);await c.ready();assert.equal(c.snapshot().drafts[0].name,suggested);assert.equal(c.document.querySelector('#overlay [role="dialog"]'),null);
+ }finally{c.cleanup();}
+});

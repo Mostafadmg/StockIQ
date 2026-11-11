@@ -7,6 +7,7 @@ The client was reconstructed from read-only inspection of the owner's website. A
 | Shell | Original logo, compact sticky header, violet active pills, clock, branch name, support/truck/alerts/text/theme/basket/account controls; responsive menu and demo sign-in page |
 | Auto Orders | Orders/Fast Lines/OTC tabs; compact product table; selections, dismissal, editable shelf counts, add lines |
 | Manual Orders | Left medicine lookup and selected packs, right reference-price cards, fixed supplier/total/Continue bar; real dm+d matching; direct quantity/Add to basket controls and a selection modal with Send now and Add to basket plus in-modal result |
+| Basket / Order review | Basket opens `/review` with supplier groups, ready lines, quantity and supplier edits, selection, sorting, removal, drafts and a fixed order-total footer; submissions remain simulations |
 | Basket | Editable quantities, remove/save draft, Review & Cascade, per-line supplier selection and atomic split test orders |
 | Goods In | Deliveries/Claims and More → Analytics/Settings; supplier cards, attention queue, Core/wholesaler receipt selection, invoice/date/search filters |
 | Claims | Wholesaler/Core filter, draft/submitted/acknowledged/resolved/disputed statuses, dates, values and credits |

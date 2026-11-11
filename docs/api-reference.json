@@ -132,11 +132,16 @@
     {
       "method": "PATCH",
       "path": "/api/basket/{productId}",
-      "description": "Sets the quantity of an existing basket line.",
+      "description": "Updates the quantity and/or selected test supplier of an existing basket line.",
       "success_status": 200,
       "request_body": {
-        "quantity": 3
-      }
+        "quantity": 3,
+        "supplier": "AAH"
+      },
+      "notes": [
+        "At least one of quantity or supplier is required. Validate all supplied fields before applying a change.",
+        "Quantity must be a whole number from 1 to 999. Use DELETE to remove the line."
+      ]
     },
     {
       "method": "DELETE",
@@ -631,5 +636,12 @@
       "No live supplier quote is fetched. NHS reference prices are not wholesale quotations.",
       "Read-only: basket, orders and shelf stock remain unchanged."
     ]
+  },
+  "basketReview": {
+    "route": "/review",
+    "preview": "POST /api/basket/cascade recalculates test quotes without changing basket or orders.",
+    "submit": "POST /api/orders/cascade accepts a nonempty list of unique {productId,supplier} allocations. Every ID must identify a current basket line. Only allocated lines are submitted; other basket lines remain unchanged. Validation completes before any order or basket mutation.",
+    "selection": "With no explicitly selected lines the interface includes all ready lines. A nonempty selection includes only those lines.",
+    "production": false
   }
 }

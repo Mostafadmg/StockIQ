@@ -26,6 +26,7 @@ The local app runs at http://localhost:3000. `PORT` selects another loopback por
 | `src/parity-views.css` | Original page-specific layouts |
 | `src/styles.css`, `src/views.css`, `src/manual-search.css` | Base styles beneath the parity layers |
 | `src/order-summary.js` | Shared acceptance, supplier, quantity and arrival summaries for basket/results/details |
+| `src/basket-review.js`, `src/basket-review.css` | Full-page `/review` basket, supplier groups, selection, sorting and responsive fixed footer |
 | `server/fulfilment.mjs` | Shared London-time delivery calendar, simulation acceptance and immutable snapshot validation |
 | `server/api.mjs` | Sandbox data validation, actions, calculations and snapshot schema |
 | `server/dmd-local.mjs` | Indexed compressed NHS catalogue lookup |
@@ -46,6 +47,8 @@ Direct item submission uses `POST /api/orders/direct` with `{productId,quantity,
 Manual medicine names use `choose-manual-product` and the picker's `cleanup.openProduct(record,{quantity})` method, so search results and existing workspace products open the same direct-send/basket modal. Each pack also has a separate quantity and direct **Add to basket** control; that action imports the selected pack if needed and updates only the basket, without opening the modal or submitting an order. The compact catalogue source/provenance disclosure keeps reference details available without filling the mobile screen. Secondary header controls remain in the account menu on small screens.
 
 The DOM regression tests mount the real picker and app with Linkedom; gesture tests cover a completed touch selection versus a scroll/cancel and duplicate click suppression. Browser visual QA is separate from these tests.
+
+Basket entry points navigate to `/review` rather than opening a modal. Review refreshes are read-only; quantity/supplier edits and removal preserve the current page, notes and selection. With an explicit selection, cascade submission creates test orders only for those basket lines and leaves other lines untouched. Draft restoration returns to review. See `docs/basket-parity.md` for the original-source evidence and browser verification limits.
 
 Supplier quote checks use `POST /api/orders/quote`. Manual quote calls are serialized, debounced and discarded when input changes. Catalogue import resolves once per selection; direct sending retains its own retry ID. All delivery calendars share `server/fulfilment.mjs`, served as a same-origin module for the Delivery Times view. Dates use Europe/London, including BST; configured van offsets are working days and skip weekends and England/Wales bank holidays. Historical acceptance and arrival estimates stay fixed after creation. Partial or unavailable packs never become stock during receipt.
 

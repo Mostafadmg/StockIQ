@@ -22,7 +22,7 @@ Open `http://localhost:3000`. Deep links including `/daily-orders`, `/inventory`
 1. Open **Manual Orders** and type at least two characters, such as `amoxicillin 500` or a brand name.
 2. Set the quantity beside a matching pack and use **Add to basket** to add it directly. The same shortcut is available for added medicines and workspace products. This does not open a modal or send an order.
 3. Alternatively, choose the medicine name to open its ordering modal, showing the NHS identifier, pack, manufacturer and available reference price. Set the pack quantity and test supplier. **Send now** creates an order for only that item and shows the result inside the modal, without changing the existing basket. **Add to basket** is also available inside the modal.
-4. For basket orders, use **Review & Cascade** to compare simulated supplier allocations and submit one or more test orders. Receive orders in **Goods In** to update test shelf stock.
+4. Open **Basket** to navigate to the full **Order review** page at `/review`. Edit quantities and test suppliers, sort or remove lines, and save a draft. With no explicit selection, all ready lines are included; select lines to submit only those and keep the rest in the basket. **Submit to wholesalers** creates only isolated test orders. Receive test orders in **Goods In** to update test shelf stock.
 
 Medicine and pack data are real reference records. Supplier costs and stock are simulated: newly imported packs use an explicitly labelled £1 test cost and start at zero shelf stock. Tariff/list reference prices are shown separately and are not wholesale quotations. Quantities entered for orders/receipts are whole packs; the dm+d quantity/unit describes the contents of one pack.
 
@@ -68,7 +68,7 @@ Older tariff-only workspace snapshots remain supported. The default search uses 
 
 The browser saves its isolated workspace snapshot locally and sends that snapshot with each logical API request through `POST /api/dispatch`. This works even when the host starts a fresh Worker instance for every request. Read-only searches do not overwrite newer basket/stock changes. Export workspace JSON to retain a copy; another browser starts a new test workspace. Reset affects only the active workspace. This is device-local test storage, not a durable pharmacy database or production authentication design.
 
-The hosted draft remains owner-private. Browser API requests are restricted to the same origin. Source ZIP downloads include the verified catalogue and application code, without credentials or browser state.
+Hosted access follows the site's sharing settings. Browser API requests are restricted to the same origin. Source ZIP downloads include the verified catalogue and application code, without credentials or browser state.
 
 ## API examples
 
