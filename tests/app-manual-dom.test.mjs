@@ -15,6 +15,14 @@ test('the mounted app opens a medicine result in the manual-order modal and keep
  globalThis.fetch=(path,options={})=>handleApi(new Request(new URL(path,url),options));
  try{
   await import('../src/app.js?manual-dom-regression');try{await until(()=>doc.querySelector('.dmd-query'));}catch(error){throw new Error(error.message+' '+doc.body.textContent);}
+  const initial=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace;
+  const scan=doc.querySelector('.manual-scan-input');assert.ok(scan);
+  scan.value=']d201050375630032351727123110BATCH42'+String.fromCharCode(29)+'21SERIAL-ROOT-TEST';
+  const enter=new window.Event('keydown',{bubbles:true,cancelable:true});Object.defineProperty(enter,'key',{value:'Enter'});scan.dispatchEvent(enter);
+  await until(()=>doc.querySelector('.manual-scan-summary')&&doc.querySelectorAll('.manual-comparison-row').length===7);
+  const scanDialog=doc.querySelector('[role="dialog"]');assert.match(scanDialog.textContent,/Verapamil 160mg/);assert.match(scanDialog.textContent,/BATCH42/);assert.match(scanDialog.textContent,/2027-12-31/);assert.match(scanDialog.textContent,/Joint cheapest test total/);assert.equal(doc.querySelectorAll('[role="dialog"]').length,1);
+  const scanned=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace;assert.equal(scanned.orders.length,initial.orders.length,'Scanning must not send an order');assert.deepEqual(scanned.basket,initial.basket);assert.equal(JSON.stringify(scanned).includes('SERIAL-ROOT-TEST'),false);assert.equal(doc.body.textContent.includes('SERIAL-ROOT-TEST'),false);assert.equal(scan.value,'');
+  doc.querySelector('.manual-order-close').dispatchEvent(new window.Event('click',{bubbles:true}));await sleep(10);
   const input=doc.querySelector('.dmd-query');input.value='amoxicillin 500';input.dispatchEvent(new window.Event('input',{bubbles:true}));await until(()=>doc.querySelector('[data-dmd-index]'));
   const option=doc.querySelector('[data-dmd-index] strong');option.dispatchEvent(new window.Event('click',{bubbles:true,cancelable:true}));await sleep(10);
   const dialog=doc.querySelector('[role="dialog"]');assert.ok(dialog,'Choosing a result should mount the item modal');assert.match(dialog.textContent,/Amoxicillin/);assert.match(dialog.textContent,/Send now/);assert.match(dialog.textContent,/Add to basket/);assert.equal(doc.querySelectorAll('[role="dialog"]').length,1);
@@ -35,7 +43,7 @@ test('the mounted app opens a medicine result in the manual-order modal and keep
   await until(()=>!doc.querySelector('#overlay [role="dialog"]'));
   const received=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace;assert.equal(received.orders[0].status,'Received');assert.equal(received.orders[0].items[0].received,2);assert.equal(received.products.find(p=>p.id===sent.items[0].id).stock,stockBefore+2);assert.equal(received.orders[0].fulfilment.outstandingQuantity,1);
   doc.querySelector('[data-action="account"]').dispatchEvent(new window.Event('click',{bubbles:true}));doc.querySelector('[data-nav="api"]').dispatchEvent(new window.Event('click',{bubbles:true}));
-  doc.querySelector('[data-action="run-suite"]').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>doc.querySelector('#toast').textContent.includes('13/13 API checks passed'));
+  doc.querySelector('[data-action="run-suite"]').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>doc.querySelector('#toast').textContent.includes('15/15 API checks passed'));
   assert.equal(JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace.orders.length,received.orders.length,'API console checks use a separate workspace');
  }finally{globalThis.fetch=originalFetch;globalThis.setInterval=originalInterval;}
 });

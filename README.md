@@ -100,3 +100,7 @@ npm start
 Production supplier ordering, transactional stock, PMR, role-based access, automated OCR and trained forecasting remain future integrations. The demo does not imply those connections exist.
 
 Order results show the supplying test wholesaler, supplier reference, requested/accepted/unavailable packs and a London-time estimated arrival. Try full, partial and unavailable responses from the manual modal’s **Test response** disclosure. Delivery Times controls the shared schedule estimates; offsets count working days, excluding weekends and England/Wales bank holidays. Goods In checks in only accepted packs. All supplier prices, availability and order responses remain simulations.
+
+Manual Orders also supports a connected USB keyboard scanner. Click **Ready to scan**, scan the pack, and finish with Enter or Tab. Valid EAN/UPC and GS1 DataMatrix codes identify the exact dm+d AMPP using the NHS GTIN index. GS1 batch and expiry are shown when encoded; a linear barcode has neither. A unique current pack opens the order modal, while historical/container/ambiguous matches need confirmation. Scanning never submits an order.
+
+Supplier comparison reports the lowest test total for the full pack quantity and breaks price ties using the earliest known delivery estimate. Current supplier prices may all tie; reference/list prices from dm+d remain separate from simulated supplier costs.

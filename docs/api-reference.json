@@ -1,6 +1,6 @@
 {
   "title": "StockIQ sandbox API",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "purpose": "Self-contained draft endpoints for synthetic workflow testing. This is not the production StockIQ API contract.",
   "base_url": "Same origin as the draft website. Use relative /api/... paths only.",
   "network_rules": [
@@ -573,6 +573,63 @@
       "The accepted result and delivery estimate stay fixed across retries, snapshot restoration and later schedule edits",
       "Receipts cannot include packs that were not accepted; stock changes only on receipt",
       "Legacy workspace orders without acceptance metadata remain valid"
+    ]
+  },
+  "barcodeLookup": {
+    "method": "POST",
+    "path": "/api/dmd/barcode",
+    "body": {
+      "barcode": "Complete EAN/UPC/GTIN or GS1 element string from keyboard scanner"
+    },
+    "result": [
+      "gtin",
+      "format",
+      "batch",
+      "expiry",
+      "expiryRaw",
+      "warnings",
+      "requiresPackConfirmation",
+      "matches",
+      "historical",
+      "ambiguous",
+      "source",
+      "releaseDate",
+      "gtinReleaseDate"
+    ],
+    "rules": [
+      "Read-only exact GTIN mapping to active NHS AMPP packs. No name matching or silent first-match selection.",
+      "EAN8/UPC12/EAN13/GTIN14 validated by check digit and normalized to14 digits without losing leading zeros.",
+      "GS1 AI01 identifies pack; AI17 supplies expiry; AI10 supplies batch. Serial is discarded from response and workspace.",
+      "AI02 denotes contained trade items, so it requires explicit pack confirmation; AI37 does not change order quantity.",
+      "Current mappings take priority. Ended mappings may identify older shelf packs, visibly flagged; ambiguous results require a choice.",
+      "No raw barcode, serial, stock receipt, expiry inventory entry or retrieval is saved by lookup.",
+      "A one-dimensional barcode does not encode batch or expiry. No expiry date is inferred from dm+d.",
+      "Unknown valid barcode returns200 with empty matches; malformed code returns400."
+    ]
+  },
+  "supplierComparison": {
+    "method": "POST",
+    "path": "/api/orders/compare",
+    "body": {
+      "productId": "canonical workspace product id",
+      "quantity": 3,
+      "scenario": "full | partial | unavailable (default full)"
+    },
+    "result": [
+      "quotes",
+      "cheapestSuppliers",
+      "recommendedSupplier",
+      "simulated",
+      "priceBasis",
+      "message"
+    ],
+    "rules": [
+      "Uses the same canonical test price, acceptance and arrival policy as quote and submission.",
+      "Only suppliers that accept the full requested quantity qualify as cheapest.",
+      "All equal-price suppliers are reported as tied; earliest known arrival breaks recommendation ties.",
+      "Partial or unavailable scenarios have no full-quantity recommendation.",
+      "No live supplier quote is fetched. NHS reference prices are not wholesale quotations.",
+      "Read-only: basket, orders and shelf stock remain unchanged."
     ]
   }
 }

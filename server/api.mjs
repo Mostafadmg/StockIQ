@@ -1,6 +1,8 @@
 /** StockIQ isolated ordering API. Catalogue reads never place supplier orders. */
 import {searchDmd,getDmdPacks,getDmdPack,tariffPackId,dmdCatalogueStatus} from './dmd.mjs';
 import {nextDeliveryEstimate,normaliseFulfilmentScenario,scenarioAcceptedQuantity,createOrderFulfilment,fulfilmentReceiptStatus,restoreOrderFulfilment} from './fulfilment.mjs';
+import {parseMedicineBarcode} from '../src/barcode.js';
+import {lookupDmdGtin} from './gtin.mjs';
 const sessions = new Map();
 const MAX_SESSIONS = 160;
 const MAX_BODY = 256 * 1024;
@@ -58,6 +60,10 @@ function attachOrderFulfilment(workspace,order,scenario='full'){
   order.fulfilment=createOrderFulfilment({supplier:order.supplier,items:order.items,scenario,createdAt:order.createdAt,orderId:order.id,schedules:workspace.features.deliveryVans});
   for(const item of order.items){item.requestedQuantity=item.quantity;item.acceptedQuantity=scenarioAcceptedQuantity(item.quantity,scenario);item.outstandingQuantity=item.quantity-item.acceptedQuantity;item.supplier=order.supplier;}
   order.total=money(order.items.reduce((sum,item)=>sum+item.price*item.acceptedQuantity,0));order.status=fulfilmentReceiptStatus(order.items);return order;
+}
+function supplierQuote(workspace,p,quantity,supplier,scenario,createdAt=iso()){
+  const fulfilment=createOrderFulfilment({supplier,items:[{quantity}],scenario,createdAt,schedules:workspace.features.deliveryVans});
+  return {...fulfilment,productId:p.id,unitPrice:p.price,estimatedTotal:money(p.price*fulfilment.acceptedQuantity)};
 }
 function fail(message,status=400,code) { const err = new Error(message);err.status=status;err.code=code;throw err; }
 function integer(value,min=1,max=999,label='Quantity') { if (!Number.isInteger(value)||value<min||value>max) fail(`${label} must be a whole number between ${min} and ${max}.`);return value; }
@@ -321,6 +327,14 @@ export async function handleApi(request,env={}) {
       const transfer=w.features.surplus.transfers.find(t=>t.id===transferMatch[1]);if(!transfer)fail('Surplus transfer not found.',404);if(transferMatch[2]==='dispatch'){if(transfer.status!=='Requested')fail('Only a requested test transfer can be dispatched.',409);const p=product(w,transfer.productId);if(p.stock<transfer.quantity)fail('The sample shelf stock is too low for this transfer.');p.stock-=transfer.quantity;transfer.status='Dispatched';transfer.dispatchedAt=iso();}else{if(transfer.status!=='Dispatched')fail('Only a dispatched test transfer can be confirmed.',409);transfer.status='Confirmed';transfer.confirmedAt=iso();}return reply({...transfer,simulated:true},200,w);
     }
     if(path==='/api/catalogue/status'&&method==='GET')return reply(dmdCatalogueStatus(),200,w);
+    if(path==='/api/dmd/barcode'&&method==='POST'){
+      const data=featureObject(await body(request),'Barcode lookup',['barcode']);
+      if(typeof data.barcode!=='string'||!data.barcode.trim()||data.barcode.length>1024)fail('Scan or paste a medicine barcode of at most 1024 characters.',400,'INVALID_BARCODE');
+      let parsed;try{parsed=parseMedicineBarcode(data.barcode);}catch{fail('The barcode is invalid or incomplete. Scan the pack again, including its full GS1 separators.',400,'INVALID_BARCODE');}
+      const lookup=await lookupDmdGtin(parsed.gtin,env),matches=lookup.matches||[];
+      const warnings=[...new Set([...(parsed.warnings||[]),...(lookup.warnings||[])])];
+      return reply({gtin:parsed.gtin,format:parsed.format,batch:parsed.batch,expiry:parsed.expiry,expiryRaw:parsed.expiryRaw,warnings,requiresPackConfirmation:Boolean(parsed.requiresPackConfirmation||lookup.ambiguous||lookup.historical),matches,associations:lookup.associations||[],source:lookup.source,releaseDate:lookup.releaseDate,gtinReleaseDate:lookup.gtinReleaseDate,historical:Boolean(lookup.historical),ambiguous:Boolean(lookup.ambiguous),matchPolicy:lookup.matchPolicy,message:!matches.length?'No matching active medicine pack was found for this barcode. Search by medicine name instead.':lookup.historical?'This barcode has a historical NHS association. Check the medicine and pack before continuing.':matches.length>1?'This barcode matches more than one medicine pack. Choose the pack shown on the box.':'Medicine pack identified. Review the pack and supplier before sending.'},200,w);
+    }
     if(path==='/api/dmd/search'&&method==='GET'){
       const query=(url.searchParams.get('q')||'').trim();if(query.length>200)fail('Search must be at most 200 characters.');
       return reply(query.length<2?{matches:[],source:'NHS dm+d'}:await searchDmd(query,env),200,w);
@@ -361,7 +375,15 @@ export async function handleApi(request,env={}) {
     }
     if(path==='/api/orders/quote'&&method==='POST'){
       const data=featureObject(await body(request),'Order preview',['productId','quantity','supplier','scenario']);const p=product(w,data.productId),quantity=integer(data.quantity),scenario=normaliseFulfilmentScenario(data.scenario);if(!suppliers.includes(data.supplier))fail('Choose a known test supplier.');
-      const fulfilment=createOrderFulfilment({supplier:data.supplier,items:[{quantity}],scenario,schedules:w.features.deliveryVans});return reply({...fulfilment,productId:p.id,unitPrice:p.price,estimatedTotal:money(p.price*fulfilment.acceptedQuantity)},200,w);
+      return reply(supplierQuote(w,p,quantity,data.supplier,scenario),200,w);
+    }
+    if(path==='/api/orders/compare'&&method==='POST'){
+      const data=featureObject(await body(request),'Supplier comparison',['productId','quantity','scenario']),p=product(w,data.productId),quantity=integer(data.quantity),scenario=normaliseFulfilmentScenario(data.scenario),quotedAt=iso();
+      const quotes=suppliers.map(supplier=>supplierQuote(w,p,quantity,supplier,scenario,quotedAt)),complete=quotes.filter(quote=>quote.acceptedQuantity===quantity),lowest=complete.length?Math.min(...complete.map(quote=>quote.estimatedTotal)):null;
+      const cheapest=complete.filter(quote=>quote.estimatedTotal===lowest),cheapestSuppliers=cheapest.map(quote=>quote.supplier);
+      const arrival=quote=>quote.delivery?.estimatedArrivalAt&&Number.isFinite(Date.parse(quote.delivery.estimatedArrivalAt))?Date.parse(quote.delivery.estimatedArrivalAt):Infinity;
+      const recommended=cheapest.reduce((best,quote)=>!best||arrival(quote)<arrival(best)?quote:best,null);
+      return reply({productId:p.id,quantity,scenario,quotes,cheapestSuppliers,recommendedSupplier:recommended?.supplier??null,simulated:true,priceBasis:'test_prices',message:!complete.length?'No supplier can supply the full requested quantity in this test response. Review accepted packs and shortages before choosing.':cheapest.length===complete.length&&cheapest.length>1?'All suppliers have the same test price. The recommendation uses the earliest known estimated arrival; equal or unknown arrival times keep supplier order.':'The recommendation is the lowest test total for the full requested quantity, with estimated arrival used to break price ties. No live supplier price was fetched.'},200,w);
     }
     if(path==='/api/orders/direct'&&method==='POST'){
       const data=featureObject(await body(request),'Direct order',['productId','quantity','supplier','notes','requestId','scenario']);

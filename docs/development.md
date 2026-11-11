@@ -48,3 +48,13 @@ Manual workspace-product cards use `choose-manual-product` and the picker's `cle
 The DOM regression tests mount the real picker and app with Linkedom; gesture tests cover a completed touch selection versus a scroll/cancel and duplicate click suppression. Browser visual QA is separate from these tests.
 
 Supplier quote checks use `POST /api/orders/quote`. Manual quote calls are serialized, debounced and discarded when input changes. Catalogue import resolves once per selection; direct sending retains its own retry ID. All delivery calendars share `server/fulfilment.mjs`, served as a same-origin module for the Delivery Times view. Dates use Europe/London, including BST; configured van offsets are working days and skip weekends and England/Wales bank holidays. Historical acceptance and arrival estimates stay fixed after creation. Partial or unavailable packs never become stock during receipt.
+
+## Connected barcode scanners
+
+The Newland NLS-FR40 workflow follows the keyboard-scanner approach inspected read-only in `Mostafadmg/mellonsdaily` at `76ddd733c25374e53afd28bb0baa0f2c3f63d5e2`. No device SDK, camera permission or production retrieval connection is required. Configure the physical scanner as a USB HID keyboard with an Enter or Tab suffix and preserve GS1 FNC1/group separators (ASCII29 / Ctrl+]). Click Ready to scan in Manual Orders before scanning. The app does not intercept typing in other controls or program the scanner.
+
+`src/barcode.js` validates EAN/UPC/GTIN and decodes GS1 AI01/02,17,10,21 and37. Expiry YY uses the year within the current year minus50 through plus49; DD00 is the final day of the month. Variable data is never split by guessing a hidden application identifier; missing separators leave expiry unknown and may raise a review warning. AI02 container codes require explicit pack confirmation and never infer pack count.
+
+`server/gtin.mjs` reads `data/dmd-gtin.json`:72,882 validated GTINs tied only to active AMPP packs. It prefers current NHS associations and flags historical fallback for older shelf boxes. It returns every ambiguous pack, requiring a user choice. `data/dmd-gtin-release.json` records source and dataset hashes. Rebuild with `python scripts/prepare-gtin.py --input /path/to/f_gtin2.xml --catalogue data/dmd-catalogue.json --output data`. Original NHS XML and download credentials stay outside Git.
+
+Barcode lookup and supplier comparison are read-only POSTs; their returned snapshots must not overwrite newer client state. Scan metadata stays in the open modal only. Raw scans and serial identifiers are not persisted in the workspace or returned by the barcode API. Scanning does not add to basket, place orders, create expiry records or create retrievals. These are separate, explicit actions.
