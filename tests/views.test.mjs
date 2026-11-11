@@ -45,3 +45,21 @@ test('a delivery estimated earlier today appears in the past-estimate queue',asy
  const {parseHTML}=await import('linkedom'),state=fulfilmentFixture();state.orders=[state.orders[0]];state.orders[0].fulfilment.delivery.estimatedArrivalAt='2026-11-13T09:00:00Z';
  const {document}=parseHTML(renderView('goods',{state,now:new Date('2026-11-13T12:00:00Z')}));assert.match(document.querySelector('.delivery-arrival-group h3').textContent,/Past estimate/);
 });
+
+test('History groups each London date once and sorts dates and orders newest first',async()=>{
+ const {parseHTML}=await import('linkedom'),state=seedWorkspace(),base=state.orders[0];
+ state.orders=[['TEST-9101','2026-11-09T10:00:00Z'],['TEST-9102','2026-11-11T09:00:00Z'],['TEST-9103','2026-11-10T11:00:00Z'],['TEST-9104','2026-11-11T14:00:00Z']].map(([id,createdAt])=>({...structuredClone(base),id,createdAt}));
+ const {document}=parseHTML(renderView('history',{state})),groups=[...document.querySelectorAll('[data-history-day]')];
+ assert.deepEqual(groups.map(group=>group.dataset.historyDay),['2026-11-11','2026-11-10','2026-11-09']);
+ assert.deepEqual(groups.map(group=>[...group.querySelectorAll('.history-order')].map(order=>order.dataset.orderId)),[['TEST-9104','TEST-9102'],['TEST-9103'],['TEST-9101']]);
+ assert.equal(document.querySelectorAll('.history-day').length,3);
+});
+
+test('History date filters and group headings agree at a London summer-time date boundary',async()=>{
+ const {parseHTML}=await import('linkedom'),state=seedWorkspace(),base=state.orders[0];
+ state.orders=[['TEST-9201','2026-06-10T23:30:00Z'],['TEST-9202','2026-06-10T22:30:00Z']].map(([id,createdAt])=>({...structuredClone(base),id,createdAt}));
+ const {document}=parseHTML(renderView('history',{state,historyFrom:'2026-06-11',historyTo:'2026-06-11'}));
+ assert.deepEqual([...document.querySelectorAll('.history-order')].map(order=>order.dataset.orderId),['TEST-9201']);
+ assert.equal(document.querySelector('[data-history-day]').dataset.historyDay,'2026-06-11');
+ assert.match(document.querySelector('.history-order-head').textContent,/00:30/);
+});
