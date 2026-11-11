@@ -20,8 +20,8 @@ Open `http://localhost:3000`. Deep links including `/daily-orders`, `/inventory`
 ## Manual ordering with NHS dm+d
 
 1. Open **Manual Orders** and type at least two characters, such as `amoxicillin 500` or a brand name.
-2. Choose a matching AMPP or VMPP pack. A modal shows the NHS identifier, pack, manufacturer and available reference price.
-3. Set the pack quantity and test supplier. **Send now** creates an order for only that item and shows the result inside the modal, without changing the existing basket. **Add to basket** keeps the bulk-ordering route available.
+2. Set the quantity beside a matching pack and use **Add to basket** to add it directly. The same shortcut is available for added medicines and workspace products. This does not open a modal or send an order.
+3. Alternatively, choose the medicine name to open its ordering modal, showing the NHS identifier, pack, manufacturer and available reference price. Set the pack quantity and test supplier. **Send now** creates an order for only that item and shows the result inside the modal, without changing the existing basket. **Add to basket** is also available inside the modal.
 4. For basket orders, use **Review & Cascade** to compare simulated supplier allocations and submit one or more test orders. Receive orders in **Goods In** to update test shelf stock.
 
 Medicine and pack data are real reference records. Supplier costs and stock are simulated: newly imported packs use an explicitly labelled £1 test cost and start at zero shelf stock. Tariff/list reference prices are shown separately and are not wholesale quotations. Quantities entered for orders/receipts are whole packs; the dm+d quantity/unit describes the contents of one pack.

@@ -78,9 +78,9 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   const searchArea=node('div','dmd-search-area');
   const label=node('label','dmd-search-label','Find a medicine');label.htmlFor=`${base}-query`;
   const inputWrap=node('div','dmd-input-wrap');inputWrap.append(node('span','dmd-search-icon','⌕'));
-  const input=node('input','dmd-query');input.id=`${base}-query`;input.type='search';input.maxLength=200;input.autocomplete='off';input.spellcheck=false;input.placeholder='Medicine name, strength or NHS code';input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-haspopup','listbox');input.setAttribute('aria-controls',`${base}-results`);input.setAttribute('aria-expanded','false');input.setAttribute('aria-describedby',`${base}-status`);inputWrap.append(input);
+  const input=node('input','dmd-query');input.id=`${base}-query`;input.type='search';input.maxLength=200;input.autocomplete='off';input.spellcheck=false;input.placeholder='Medicine name, strength or NHS code';input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-haspopup','grid');input.setAttribute('aria-controls',`${base}-results`);input.setAttribute('aria-expanded','false');input.setAttribute('aria-describedby',`${base}-status`);inputWrap.append(input);
   const popover=node('div','dmd-popover');popover.hidden=true;
-  const list=node('div','dmd-options');list.id=`${base}-results`;list.setAttribute('role','listbox');list.setAttribute('aria-label','Matching medicines');popover.append(list);
+  const list=node('div','dmd-options');list.id=`${base}-results`;list.setAttribute('role','grid');list.setAttribute('aria-label','Matching medicines and basket actions');popover.append(list);
   const status=node('div','dmd-search-status','Type at least 2 characters.');status.id=`${base}-status`;status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   searchArea.append(label,inputWrap,popover,status);
   const selection=node('div','dmd-selection');selection.hidden=true;
@@ -100,17 +100,40 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   };
   const setStatus=(text,error=false)=>{if(!alive)return;status.textContent=text;status.classList.toggle('is-error',error);};
   const closeMatches=()=>{popover.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');activeIndex=-1;};
-  const updateActive=()=>{[...list.querySelectorAll('[role=option]')].forEach((option,index)=>{option.classList.toggle('is-active',index===activeIndex);option.setAttribute('aria-selected',String(index===activeIndex));});if(activeIndex>=0){input.setAttribute('aria-activedescendant',`${base}-option-${activeIndex}`);list.querySelector(`#${base}-option-${activeIndex}`)?.scrollIntoView?.({block:'nearest'});}else input.removeAttribute('aria-activedescendant');};
+  const updateActive=()=>{[...list.querySelectorAll('[data-dmd-index]')].forEach((option,index)=>{option.classList.toggle('is-active',index===activeIndex);option.closest('[role=row]')?.setAttribute('aria-selected',String(index===activeIndex));});if(activeIndex>=0){input.setAttribute('aria-activedescendant',`${base}-option-${activeIndex}`);list.querySelector(`#${base}-option-${activeIndex}`)?.scrollIntoView?.({block:'nearest'});}else input.removeAttribute('aria-activedescendant');};
   function showMatches(){
     list.replaceChildren();activeIndex=-1;input.removeAttribute('aria-activedescendant');
     if(!matches.length){closeMatches();return;}
     matches.forEach((match,index)=>{
-      const option=node('button','dmd-option');option.type='button';option.id=`${base}-option-${index}`;option.dataset.dmdIndex=String(index);option.setAttribute('role','option');option.setAttribute('aria-selected','false');option.tabIndex=-1;
+      const row=node('div','dmd-result-row');row.setAttribute('role','row');row.setAttribute('aria-selected','false');
+      const medicineCell=node('div','dmd-result-medicine');medicineCell.setAttribute('role','gridcell');medicineCell.id=`${base}-option-${index}`;
+      const option=node('button','dmd-option');option.type='button';option.dataset.dmdIndex=String(index);option.tabIndex=-1;option.setAttribute('aria-label',`Ordering options for ${match.name}`);
       const description=node('span','dmd-option-description');description.append(node('strong','',match.name));
       const metaParts=[packLabel(match)];if(match.manufacturer&&!match.name.toLowerCase().includes(match.manufacturer.toLowerCase()))metaParts.push(match.manufacturer);if(match.genericName&&!match.name.toLowerCase().includes(match.genericName.toLowerCase()))metaParts.push(`Generic: ${match.genericName}`);const meta=metaParts.filter(Boolean).join(' · ');if(meta)description.append(node('small','',meta));
-      option.append(description,node('span','dmd-type',match.type==='SAMPLE'?'Sample product':match.type.startsWith('TARIFF')?'Tariff pack':match.type));list.append(option);
+      option.append(description,node('span','dmd-type',match.type==='SAMPLE'?'Sample product':match.type.startsWith('TARIFF')?'Tariff pack':match.type));medicineCell.append(option);row.append(medicineCell);
+      const actionCell=node('div','dmd-result-actions');actionCell.setAttribute('role','gridcell');
+      if(PACK_TYPES.has(match.type)){
+        const quantity=node('input','dmd-quick-quantity');quantity.type='number';quantity.min='1';quantity.max='999';quantity.step='1';quantity.value='1';quantity.dataset.dmdQuantity=String(index);quantity.setAttribute('inputmode','numeric');quantity.setAttribute('aria-label',`Packs to add for ${match.name}`);
+        const add=node('button','btn btn-soft dmd-quick-add','Add to basket');add.type='button';add.dataset.dmdAdd=String(index);add.setAttribute('aria-label',`Add ${match.name} to basket`);actionCell.append(quantity,add);
+      }else actionCell.append(node('span','dmd-quick-pack-hint','Choose a pack first'));
+      row.append(actionCell);list.append(row);
     });
     popover.hidden=false;input.setAttribute('aria-expanded','true');
+  }
+  async function addProduct(record,{quantity=1}={}){
+    if(!alive||isAdding||medicineModal||scanBusy)return false;
+    const prepared=prepareManualProductSelection(record,{quantity}),pack=prepared.record;
+    if(!PACK_TYPES.has(pack.type))throw new Error('Choose a medicine pack before adding to the basket.');
+    isAdding=true;const sequence=searchSequence,focused=doc.activeElement,controls=[input,sourceSelect,scanInput,scanLookup,scanFocus,...root.querySelectorAll('[data-dmd-add],[data-dmd-quantity]')],disabled=controls.map(control=>control.disabled);
+    controls.forEach(control=>control.disabled=true);setStatus(`Adding ${prepared.quantity} ${prepared.quantity===1?'pack':'packs'} to basket…`);
+    try{await onAdd({id:pack.id,type:pack.type,query:pack.name.slice(0,200),quantity:prepared.quantity});if(alive&&sequence===searchSequence)setStatus(`${prepared.quantity} ${prepared.quantity===1?'pack':'packs'} of ${pack.name} added to your basket. Review the basket before sending.`);return true;}
+    catch(error){if(alive&&sequence===searchSequence)setStatus(error?.message||'Could not add this pack. Try again.',true);onError(error);throw error;}
+    finally{isAdding=false;if(alive){controls.forEach((control,index)=>control.disabled=disabled[index]);if(doc.activeElement===doc.body&&root.contains(focused)&&focused.isConnected!==false)focused.focus();}}
+  }
+  function chooseResult(index){
+    const quantity=list.querySelector(`[data-dmd-quantity="${index}"]`),count=quantity?Number(quantity.value):1;
+    if(!Number.isInteger(count)||count<1||count>999){setStatus('Enter a whole number of packs between 1 and 999.',true);quantity?.focus();return;}
+    void chooseMatch(index,count);
   }
   const setScanStatus=(text,error=false)=>{if(!alive)return;scanStatus.textContent=text;scanStatus.classList.toggle('is-error',error);};
   const clearScanChoices=()=>{scanMatches=[];pendingScanMetadata=null;scanMatchesHost.replaceChildren();scanMatchesHost.hidden=true;};
@@ -128,6 +151,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   async function lookupBarcode(){
     if(!alive||scanBusy||medicineModal||isAdding)return;
     const raw=scanInput.value;if(!raw.trim()){setScanStatus('Scan or paste a medicine barcode first.',true);scanInput.focus();return;}
+    clearTimeout(timer);searchSequence++;matches=[];closeMatches();isSearching=false;input.removeAttribute('aria-busy');
     clearScanChoices();scanInput.value='';scanBusy=true;const sequence=++scanSequence;scanInput.readOnly=true;scanLookup.disabled=scanFocus.disabled=true;setScanStatus('Finding the exact NHS dm+d pack…');
     try{
       const result=await request('/api/dmd/barcode','POST',{barcode:raw});if(!alive||sequence!==scanSequence)return;
@@ -346,7 +370,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     if(event.key==='ArrowDown'||event.key==='ArrowUp'){
       if(!matches.length)return;event.preventDefault();event.stopPropagation();if(popover.hidden)showMatches();
       activeIndex=event.key==='ArrowDown'?(activeIndex+1)%matches.length:(activeIndex<0?matches.length-1:(activeIndex-1+matches.length)%matches.length);updateActive();
-    }else if(event.key==='Enter'&&!popover.hidden&&activeIndex>=0){event.preventDefault();event.stopPropagation();void chooseMatch(activeIndex);}
+    }else if(event.key==='Enter'&&!popover.hidden&&activeIndex>=0){event.preventDefault();event.stopPropagation();chooseResult(activeIndex);}
   });
   // Touch/pen taps must activate on pointerup: cancelling touch pointerdown can
   // suppress iOS's compatibility click. Keep the option visible while focus moves.
@@ -363,20 +387,22 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     const inside=gesture.option===event.target||gesture.option.contains(event.target);
     lastPointerInteraction={option:gesture.option,until:Date.now()+700};
     if(!alive||moved||!inside||!root.contains(gesture.option)||gesture.sequence!==searchSequence||medicineModal||isAdding)return;
-    event.preventDefault();event.stopPropagation();void chooseMatch(gesture.index);
+    event.preventDefault();event.stopPropagation();chooseResult(gesture.index);
   });
   listen(doc,'pointercancel',event=>{if(optionPointer&&(event.pointerId??0)===optionPointer.id){lastPointerInteraction={option:optionPointer.option,until:Date.now()+700};optionPointer=null;}});
   listen(root,'click',event=>{
-    const option=event.target.closest('[data-dmd-index]');if(option&&root.contains(option)){event.preventDefault();event.stopPropagation();if(medicineModal||isAdding||(lastPointerInteraction?.option===option&&lastPointerInteraction.until>Date.now()))return;void chooseMatch(Number(option.dataset.dmdIndex));return;}
+    const quickAdd=event.target.closest('[data-dmd-add]');if(quickAdd&&root.contains(quickAdd)){event.preventDefault();event.stopPropagation();const index=Number(quickAdd.dataset.dmdAdd),quantity=list.querySelector(`[data-dmd-quantity="${index}"]`);void addProduct(matches[index],{quantity:quantity?.value||''}).catch(error=>{if(alive){setStatus(error?.message||'Could not add this pack.',true);quantity?.focus();}});return;}
+    const option=event.target.closest('[data-dmd-index]');if(option&&root.contains(option)){event.preventDefault();event.stopPropagation();if(medicineModal||isAdding||(lastPointerInteraction?.option===option&&lastPointerInteraction.until>Date.now()))return;chooseResult(Number(option.dataset.dmdIndex));return;}
     if(event.target.closest('[data-dmd-clear]')){event.preventDefault();event.stopPropagation();selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isLoadingPacks=false;input.value='';renderSelection();setStatus('Type at least 2 characters.');input.focus();}
   });
   listen(doc,'pointerdown',event=>{if(!root.contains(event.target)){optionPointer=null;closeMatches();}});
-  listen(root,'focusout',()=>{queueMicrotask(()=>{if(alive&&!medicineModal&&!optionPointer&&!root.contains(doc.activeElement))closeMatches();});});
+  listen(root,'focusout',()=>{queueMicrotask(()=>{if(alive&&!medicineModal&&!isAdding&&!optionPointer&&!root.contains(doc.activeElement))closeMatches();});});
   const cleanup=()=>{if(!alive)return;alive=false;optionPointer=null;lastPointerInteraction=null;scanSequence++;scanInput.value='';clearScanChoices();searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
   cleanup.openProduct=(record,options={})=>{
     if(!alive||isAdding)return false;
     const prepared=prepareManualProductSelection(record,options);matches=[prepared.record];
     void chooseMatch(0,prepared.quantity);return true;
   };
+  cleanup.addProduct=addProduct;
   return cleanup;
 }
