@@ -1,4 +1,4 @@
-import {searchLocalDmd,getLocalDmdPack,dmdCatalogueStatus} from './dmd-local.mjs';
+import {searchLocalDmd,getLocalDmdPack,getLocalDmdBrands,dmdCatalogueStatus} from './dmd-local.mjs';
 /** Read-only adapter for the existing Mellons Drug Tariff edge function.
  * The upstream does not return dm+d/SNOMED ids. Internal TARIFF hashes identify
  * name/brand/pack combinations only. No supplier or reference-table writes.
@@ -53,4 +53,5 @@ export async function getDmdPack(id,type,env={},queryHint){
   throw catalogueError('This catalogue selection has expired. Search again and select its pack.',409,'CATALOGUE_SELECTION_EXPIRED');
 }
 export async function getDmdPacks(id,type,env={},queryHint){const pack=await getDmdPack(id,type,env,queryHint);return {packs:[pack],source:pack.source,releaseDate:pack.releaseDate,referenceOnly:true};}
+export async function getDmdBrands(id,type,env={}){return getLocalDmdBrands(id,type,env);}
 export {dmdCatalogueStatus};

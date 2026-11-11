@@ -653,5 +653,24 @@
       "Depot metadata is retained on historical order snapshots when delivery settings change.",
       "Delivery badges describe schedule estimates, not supplier delivery commitments."
     ]
+  },
+  "brandAlternatives": {
+    "method": "GET",
+    "path": "/api/dmd/brands?id=<NHS pack id>&type=AMPP|VMPP",
+    "result": [
+      "packs",
+      "total",
+      "truncated",
+      "source",
+      "releaseDate",
+      "selectionPolicy"
+    ],
+    "rules": [
+      "Selected pack is first. Other packs must belong to the identical NHS VMPP family, preserving medicine, strength, form and pack size.",
+      "Uses indexed snapshot lookup and exact identifiers; no fuzzy medicine-name substitution or upstream request.",
+      "At most60 packs are returned; total and truncated report the full matching count.",
+      "Read-only: brand lookup does not import products, change basket or stock, or submit orders.",
+      "Brand/reference records do not supply live wholesaler prices."
+    ]
   }
 }

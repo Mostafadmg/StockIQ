@@ -19,6 +19,31 @@ export async function getLocalDmdPack(id,type,env={}){
   const idPosition=localCatalogue.columns.indexOf('id'),typePosition=localCatalogue.columns.indexOf('type');
   const row=(await dmdShard(key)).find(row=>row[idPosition]===id&&row[typePosition]===type);if(!row)throw localDmdError('This dm+d pack is unavailable.');return localDmdRow(row);
 }
+/** Exact same-VMPP alternatives; a name prefix narrows shards, never selects a pack. */
+export async function getLocalDmdBrands(id,type,env={}){
+  const selected=await getLocalDmdPack(id,type,env),limit=60,seen=new Set(),packs=[];let total=0;
+  const add=pack=>{const key=pack.type+':'+pack.id;if(seen.has(key))return;seen.add(key);total++;if(packs.length<limit)packs.push(pack);};
+  const result=()=>({packs,total,truncated:total>packs.length,source:'NHS dm+d',releaseDate:selected.releaseDate||env.DMD_DATA?.[0]?.releaseDate||localCatalogue.releaseDate,selectionPolicy:'same-vmpp'});
+  add(selected);
+  const familyId=type==='VMPP'?selected.id:selected.genericId;
+  if(typeof familyId!=='string'||!/^[1-9][0-9]{5,17}$/.test(familyId))return result();
+  let family=type==='VMPP'?selected:null;
+  if(!family){try{family=await getLocalDmdPack(familyId,'VMPP',env);}catch(error){if(error.status!==404)throw error;}}
+  if(family)add(family);
+  if(Array.isArray(env.DMD_DATA)){
+    for(const row of env.DMD_DATA)if(row.type==='AMPP'&&row.genericId===familyId)add({...structuredClone(row),id:String(row.id),source:'NHS dm+d'});
+  }else{
+    // Every real AMPP indexes its canonical generic medicine name. The rarest
+    // prefix therefore contains all possible family shards without a full scan.
+    const canonical=dmdNormalise(family?.genericName||selected.genericName),tokens=canonical.split(/\s+/).filter(token=>token.length>=2);
+    const candidates=tokens.map(token=>localCatalogue.prefixIndex[token.slice(0,Math.min(4,token.length))]||localCatalogue.prefixIndex[token.slice(0,2)]||[]).sort((a,b)=>a.length-b.length);
+    const t=localCatalogue.columns.indexOf('type'),g=localCatalogue.columns.indexOf('genericId');
+    for(const key of candidates[0]||[])for(const row of await dmdShard(key))if(row[t]==='AMPP'&&row[g]===familyId)add(localDmdRow(row));
+  }
+  // Keep the chosen pack first; remaining generic/actual packs have stable names.
+  packs.splice(1,packs.length-1,...packs.slice(1).sort((a,b)=>Number(b.type==='VMPP')-Number(a.type==='VMPP')||a.name.localeCompare(b.name)||a.id.localeCompare(b.id)));
+  return result();
+}
 export async function searchLocalDmd(query,env={}){
   const term=dmdNormalise(query),tokens=term.split(/\s+/).filter(Boolean);if(!term||term.length<2)return {matches:[],...dmdCatalogueStatus()};
   if(Array.isArray(env.DMD_DATA)){return {matches:env.DMD_DATA.filter(row=>tokens.every(token=>dmdNormalise([row.name,row.genericName,row.brand,row.manufacturer].filter(Boolean).join(' ')).includes(token))).slice(0,25).map(row=>({...structuredClone(row),source:'NHS dm+d'})),source:'NHS dm+d',releaseDate:env.DMD_DATA[0]?.releaseDate||localCatalogue.releaseDate};}

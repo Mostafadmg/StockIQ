@@ -1,5 +1,5 @@
 /** StockIQ isolated ordering API. Catalogue reads never place supplier orders. */
-import {searchDmd,getDmdPacks,getDmdPack,tariffPackId,dmdCatalogueStatus} from './dmd.mjs';
+import {searchDmd,getDmdPacks,getDmdPack,getDmdBrands,tariffPackId,dmdCatalogueStatus} from './dmd.mjs';
 import {nextDeliveryEstimate,normaliseFulfilmentScenario,scenarioAcceptedQuantity,createOrderFulfilment,fulfilmentReceiptStatus,restoreOrderFulfilment} from './fulfilment.mjs';
 import {parseMedicineBarcode} from '../src/barcode.js';
 import {lookupDmdGtin} from './gtin.mjs';
@@ -343,6 +343,11 @@ export async function handleApi(request,env={}) {
       const reference=url.searchParams.get('id'),type=url.searchParams.get('type');catalogueIdentity(reference,type);
       const hint=(url.searchParams.get('query')||'').trim();if(hint.length>200)fail('Search hint must be at most 200 characters.');
       return reply(await getDmdPacks(reference,type,env,hint),200,w);
+    }
+    if(path==='/api/dmd/brands'&&method==='GET'){
+      const reference=url.searchParams.get('id'),type=url.searchParams.get('type');catalogueIdentity(reference,type);
+      if(!['AMPP','VMPP'].includes(type))fail('Choose a valid dm+d pack identifier.',400,'INVALID_DMD_PACK');
+      return reply(await getDmdBrands(reference,type,env),200,w);
     }
     if(path==='/api/catalogue/import'&&method==='POST'){
       const data=await body(request);const identity=catalogueIdentity(data.id,data.type),key=`catalogue-${identity.type}-${identity.id}`;

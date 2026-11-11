@@ -18,7 +18,7 @@ export function normaliseDmdRecords(records) {
     const name=typeof record.name==='string'?record.name.trim():'';
     if(!id||id.length>80||!KNOWN_TYPES.has(type)||!name||name.length>700)return [];
     const key=type+':'+id;if(seen.has(key))return [];seen.add(key);
-    return [{id,type,name,pack:typeof record.pack==='string'||typeof record.pack==='number'?String(record.pack).slice(0,200):'',unit:typeof record.unit==='string'?record.unit.slice(0,100):'',manufacturer:typeof record.manufacturer==='string'?record.manufacturer.slice(0,180):'',genericName:typeof record.genericName==='string'?record.genericName.slice(0,500):'',source:typeof record.source==='string'?record.source.slice(0,120):'',releaseDate:typeof record.releaseDate==='string'?record.releaseDate.slice(0,40):'',referencePriceSource:typeof record.referencePriceSource==='string'?record.referencePriceSource.slice(0,160):'',referencePrice:typeof record.referencePrice==='number'&&Number.isFinite(record.referencePrice)&&record.referencePrice>=0?record.referencePrice:null}];
+    return [{id,type,name,pack:typeof record.pack==='string'||typeof record.pack==='number'?String(record.pack).slice(0,200):'',unit:typeof record.unit==='string'?record.unit.slice(0,100):'',manufacturer:typeof record.manufacturer==='string'?record.manufacturer.slice(0,180):'',brand:typeof record.brand==='string'?record.brand.slice(0,180):'',genericName:typeof record.genericName==='string'?record.genericName.slice(0,500):'',source:typeof record.source==='string'?record.source.slice(0,120):'',releaseDate:typeof record.releaseDate==='string'?record.releaseDate.slice(0,40):'',referencePriceSource:typeof record.referencePriceSource==='string'?record.referencePriceSource.slice(0,160):'',referencePrice:typeof record.referencePrice==='number'&&Number.isFinite(record.referencePrice)&&record.referencePrice>=0?record.referencePrice:null}];
   }).slice(0,60);
 }
 
@@ -139,7 +139,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   const money=value=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(Number(value)||0);
   function closeMedicineModal({resetSearch=false,notify=true,force=false}={}) {
     if(!medicineModal||isAdding&&!force)return;
-    const current=medicineModal;medicineModal=null;packSequence++;clearTimeout(current.quoteTimer);current.quoteSequence=(current.quoteSequence||0)+1;current.layer.remove();
+    const current=medicineModal;medicineModal=null;packSequence++;clearTimeout(current.quoteTimer);current.quoteSequence=(current.quoteSequence||0)+1;current.brandSequence=(current.brandSequence||0)+1;current.layer.remove();
     doc.body.style.overflow=current.previousOverflow;if(current.background)current.background.inert=current.previousInert;
     input.disabled=false;sourceSelect.disabled=false;selected=null;selectedPack=null;packs=[];selection.hidden=true;
     if(resetSearch){input.value='';query='';matches=[];searchSequence++;closeMatches();}
@@ -149,14 +149,14 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   function openMedicineModal(initialQuantity=1) {
     closeMedicineModal({notify:false,force:true});
     const layer=node('div','manual-order-backdrop');layer.dataset.manualOrderModal='';
-    const dialog=node('section','manual-order-dialog');dialog.tabIndex=-1;dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby',`${base}-modal-title`);
-    const header=node('div','manual-order-header'),title=node('h2','', 'Manual order');title.id=`${base}-modal-title`;
+    const dialog=node('section','manual-order-dialog manual-order-compact');dialog.tabIndex=-1;dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby',`${base}-modal-title`);
+    const header=node('div','manual-order-header'),title=node('h2','',selected?.genericName||selected?.name||'Manual order');title.id=`${base}-modal-title`;
     const closeButton=node('button','manual-order-close','×');closeButton.type='button';closeButton.setAttribute('aria-label','Close manual order');
-    header.append(title,closeButton);
+    const headerActions=node('div','manual-order-header-actions'),optionsButton=node('button','btn btn-soft manual-order-options-toggle','More options');optionsButton.type='button';optionsButton.disabled=true;optionsButton.setAttribute('aria-expanded','false');headerActions.append(optionsButton,closeButton);header.append(title,headerActions);
     const body=node('div','manual-order-content');dialog.append(header,body);layer.append(dialog);
     const background=doc.getElementById('app'),previousOverflow=doc.body.style.overflow,previousInert=background?.inert;
     doc.body.style.overflow='hidden';if(background)background.inert=true;doc.body.append(layer);
-    medicineModal={layer,dialog,body,closeButton,previousOverflow,background,previousInert,initialQuantity,selectedSupplier:preferredSupplier,quoteSequence:0,quoteChain:Promise.resolve(),attempt:createManualOrderAttempt()};
+    medicineModal={layer,dialog,body,title,optionsButton,closeButton,previousOverflow,background,previousInert,initialQuantity,selectedSupplier:preferredSupplier,quoteSequence:0,quoteChain:Promise.resolve(),attempt:createManualOrderAttempt()};
     input.disabled=true;sourceSelect.disabled=true;
     listen(closeButton,'click',()=>closeMedicineModal());
     listen(layer,'click',event=>{event.stopPropagation();if(event.target===layer)closeMedicineModal();});
@@ -179,124 +179,138 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     if(status.isEstimate)badge.append(node('small','delivery-status-estimate','Est.'));return badge;
   }
   const supplierSource=(supplier,delivery,acceptedQuantity=1)=>{const status=deliveryStatus(delivery,{acceptedQuantity});return [supplier,status.depot].filter(Boolean).join(' · ');};
-  function deliveryCard(delivery,acceptedQuantity){
-    const card=node('div','manual-order-delivery');
-    if(!acceptedQuantity){card.append(deliveryBadge(delivery,acceptedQuantity),node('strong','','No delivery expected'),node('p','','No packs were accepted. Unavailable packs are not backordered.'));return card;}
-    const status=deliveryStatus(delivery,{acceptedQuantity}),arrival=arrivalLabel(status.estimatedArrivalAt);card.append(deliveryBadge(delivery,acceptedQuantity));
-    card.append(node('p','',arrival?'Estimated arrival · '+arrival:'No arrival estimate is available for this supplier.'));
-    if(delivery?.orderBy&&arrivalLabel(delivery.orderBy))card.append(node('p','manual-order-cutoff','Order by '+arrivalLabel(delivery.orderBy)));
-    card.append(node('small','',delivery?.note||'Schedule estimate only. Delivery has not been confirmed by a supplier.'));return card;
-  }
   function renderModalResult(kind,result,count,pack) {
-    const current=medicineModal;if(!current)return;clearTimeout(current.quoteTimer);current.quoteSequence++;const body=current.body;body.replaceChildren();
+    const current=medicineModal;if(!current)return;clearTimeout(current.quoteTimer);current.quoteSequence++;current.brandSequence=(current.brandSequence||0)+1;current.optionsButton.hidden=true;doc.activeElement?.blur?.();const body=current.body;body.replaceChildren();
     const order=result?.order,fulfilment=order?.fulfilment,accepted=fulfilment?.acceptedQuantity??order?.items?.[0]?.acceptedQuantity??count,requested=fulfilment?.requestedQuantity??count,outstanding=fulfilment?.outstandingQuantity??Math.max(0,requested-accepted);
     const outcome=kind==='sent'?(fulfilment?.status||(order?.status==='Not accepted'?'unavailable':'accepted')):'added';
     const title=outcome==='unavailable'?'Test order not accepted':outcome==='partial'?'Part of your test order accepted':kind==='sent'?'Test order accepted':'Added to basket';
     const state=node('div',`manual-order-result ${outcome==='partial'?'is-partial':outcome==='unavailable'?'is-unavailable':kind==='sent'?'is-sent':'is-added'}`);state.setAttribute('role','status');state.setAttribute('aria-live','polite');
-    state.append(node('span','manual-order-result-icon',outcome==='unavailable'?'—':outcome==='partial'?'!':'✓'),node('h3','',title),node('p','manual-order-result-name',pack.name));
+    state.append(node('h3','',title),node('p','manual-order-result-name',pack.name));
     if(kind==='sent'){
-      const details=node('dl','manual-order-result-details');
-      const values=[['Order reference',order.id],['Coming from',supplierSource(fulfilment?.sourceLabel||order.supplier,fulfilment?.delivery,accepted)],['Supplier reference',fulfilment?.supplierReference||'Not provided'],['Pack',packLabel(pack)],['Requested',`${requested} packs`],['Accepted',`${accepted} packs`],['Unavailable',`${outstanding} packs`],['Order total',money(order.total)]];
-      for(const [label,value] of values)details.append(node('dt','',label),node('dd','',String(value??'—')));
-      state.append(details,deliveryCard(fulfilment?.delivery,accepted));
-      if(outstanding)state.append(node('p','manual-order-shortage',`${outstanding} ${outstanding===1?'pack was':'packs were'} not accepted. These packs are not backordered. Review the remaining quantity before placing another order.`));
-      state.append(node('p','manual-order-result-note','Simulated supplier response · No real supplier was contacted. Only accepted packs can be received in Goods In.'));
-    }else state.append(node('p','',`${count} ${count===1?'pack is':'packs are'} ready in your basket. You can review and send the basket later.`));
+      const counts=node('div','manual-order-result-counts');for(const [label,value] of [['Requested',requested],['Accepted',accepted],['Unavailable',outstanding]]){const item=node('span','');item.append(node('small','',label),node('strong','',`${value} packs`));counts.append(item);}state.append(counts);
+      state.append(node('p','manual-order-result-source',`Coming from ${supplierSource(fulfilment?.sourceLabel||order.supplier,fulfilment?.delivery,accepted)}`),node('p','manual-order-result-ref',`Order ${order.id} · Supplier reference ${fulfilment?.supplierReference||'Not provided'}`));
+      const delivery=node('div','manual-order-result-delivery');delivery.append(deliveryBadge(fulfilment?.delivery,accepted));const status=deliveryStatus(fulfilment?.delivery,{acceptedQuantity:accepted}),arrival=arrivalLabel(status.estimatedArrivalAt);delivery.append(node('small','',arrival?'Estimated arrival · '+arrival:accepted?'Arrival estimate unavailable':'No delivery expected'));state.append(delivery,node('p','manual-order-result-total','Order total '+money(order.total)));
+      if(outstanding)state.append(node('p','manual-order-shortage',`${outstanding} ${outstanding===1?'pack was':'packs were'} not accepted. These packs are not backordered.`));
+      state.append(node('small','manual-order-result-note','Simulated response · No real supplier contacted. Only accepted packs can be received.'));
+    }else state.append(node('p','',`${count} ${count===1?'pack is':'packs are'} ready in your basket. Review and send the basket later.`));
     const actions=node('div','manual-order-result-actions'),another=node('button','btn','Continue searching'),done=node('button','btn btn-primary','Done');another.type=done.type='button';
-    if(kind==='sent'&&outstanding){const remaining=node('button','btn btn-soft manual-order-remaining','Try remaining packs');remaining.type='button';actions.append(remaining);listen(remaining,'click',()=>{current.initialQuantity=outstanding;current.selectedSupplier=order.supplier;current.attempt=createManualOrderAttempt();renderSelection();current.body.querySelector('select[name="supplier"]')?.focus();});}
+    if(kind==='sent'&&outstanding){const remaining=node('button','btn btn-soft manual-order-remaining','Try remaining packs');remaining.type='button';actions.append(remaining);listen(remaining,'click',()=>{current.initialQuantity=outstanding;current.selectedSupplier=order.supplier;current.attempt=createManualOrderAttempt();renderSelection();current.body.querySelector('[name="quantity"]')?.focus();});}
     actions.append(another,done);state.append(actions);body.append(state);
     listen(another,'click',()=>closeMedicineModal({resetSearch:true}));listen(done,'click',()=>closeMedicineModal());current.closeButton.disabled=false;done.focus();
   }
   function renderSelection(){
     selection.replaceChildren();selection.hidden=true;if(!selected)return;
-    const current=medicineModal;if(!current)return;const body=current.body;body.replaceChildren();
-    const summary=node('div','manual-order-product');summary.append(node('span','manual-order-product-label','Selected medicine'),node('strong','',selected.name));body.append(summary);
+    const current=medicineModal;if(!current)return;const body=current.body;body.replaceChildren();current.optionsButton.hidden=false;current.optionsButton.disabled=true;
+    const titleFor=pack=>{const name=pack?.genericName||selected.genericName||selected.name,label=packLabel(pack||selected);return name+(label?' · '+label:'');};
+    current.title.textContent=titleFor(selectedPack);current.title.title=current.title.textContent;
     if(isLoadingPacks){const loading=node('p','manual-order-loading','Loading available pack sizes…');loading.setAttribute('role','status');body.append(loading);return;}
     if(!packs.length){body.append(node('p','manual-order-error','No orderable packs were returned for this medicine. Try another match.'));return;}
-    const form=node('form','manual-order-form');form.noValidate=true;
-    const packField=node('label','field manual-order-pack');packField.htmlFor=`${base}-pack`;packField.append(node('span','','Pack size'));
-    const packSelect=node('select','');packSelect.id=`${base}-pack`;packSelect.name='pack';
-    packs.forEach((pack,index)=>{const option=node('option','',pack.pack?`${packLabel(pack)} · ${pack.name}`:pack.name);option.value=String(index);option.selected=selectedPack?.id===pack.id&&selectedPack?.type===pack.type;packSelect.append(option);});packField.append(packSelect);
-    const row=node('div','manual-order-fields'),quantityField=node('label','field manual-order-quantity');quantityField.htmlFor=`${base}-quantity`;quantityField.append(node('span','','Number of packs'));
+    const suppliers=['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse'],form=node('form','manual-order-form');form.noValidate=true;
+    const toolbar=node('div','manual-order-toolbar');toolbar.classList.toggle('has-pack',packs.length>1);
+    const brandField=node('label','field manual-order-brand');brandField.htmlFor=`${base}-brand`;brandField.append(node('span','','Brand / manufacturer'));
+    const brand=node('select','');brand.id=`${base}-brand`;brand.name='brand';brandField.append(brand);
+    const quantityField=node('label','field manual-order-quantity');quantityField.htmlFor=`${base}-quantity`;quantityField.append(node('span','','Packs'));
     const quantity=node('input','');quantity.id=`${base}-quantity`;quantity.name='quantity';quantity.type='number';quantity.min='1';quantity.max='999';quantity.step='1';quantity.required=true;quantity.value=String(current.initialQuantity);quantity.setAttribute('inputmode','numeric');quantityField.append(quantity);
-    const supplierField=node('label','field manual-order-supplier');supplierField.htmlFor=`${base}-supplier`;supplierField.append(node('span','','Send to wholesaler'));
-    const supplier=node('select','');supplier.id=`${base}-supplier`;supplier.name='supplier';for(const name of ['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse']){const option=node('option','',name);option.value=name;option.selected=name===current.selectedSupplier;supplier.append(option);}supplierField.append(supplier);row.append(quantityField,supplierField);
-    const simulation=node('details','manual-order-simulation');simulation.append(node('summary','','Test response'));const scenarioField=node('label','field');scenarioField.append(node('span','','Simulate supplier response'));const scenario=node('select','');scenario.name='scenario';for(const [value,text] of [['full','All packs accepted'],['partial','Some packs unavailable'],['unavailable','No packs available']]){const option=node('option','',text);option.value=value;scenario.append(option);}scenario.value='full';scenarioField.append(scenario);simulation.append(scenarioField,node('small','','For testing only. No supplier is contacted.'));
-    const quotePanel=node('section','manual-order-quote');quotePanel.setAttribute('aria-label','Supplier quote');quotePanel.setAttribute('aria-live','polite');
-    const comparisonPanel=node('section','manual-order-comparison');comparisonPanel.setAttribute('aria-label','Wholesaler price comparison');comparisonPanel.setAttribute('aria-live','polite');comparisonPanel.hidden=typeof onCompare!=='function';
-    const notesField=node('label','field');notesField.htmlFor=`${base}-notes`;notesField.append(node('span','','Order note (optional)'));const notes=node('textarea','');notes.id=`${base}-notes`;notes.name='notes';notes.maxLength=500;notes.rows=2;notes.placeholder='Add a note for this test order';notesField.append(notes);
-    const notesDetails=node('details','manual-order-notes');notesDetails.append(node('summary','','Add an order note'),notesField);
-    const reference=node('p','manual-order-reference',packReference(selectedPack));
-    const referenceDetails=node('details','manual-order-provenance');referenceDetails.append(node('summary','','Medicine details'),reference);
+    const packField=node('label','field manual-order-pack');packField.htmlFor=`${base}-pack`;packField.append(node('span','','Pack size'));packField.hidden=packs.length<2;
+    const packSelect=node('select','');packSelect.id=`${base}-pack`;packSelect.name='pack';packs.forEach((pack,index)=>{const option=node('option','',packLabel(pack)||pack.name);option.value=String(index);option.selected=selectedPack?.id===pack.id&&selectedPack?.type===pack.type;packSelect.append(option);});packField.append(packSelect);toolbar.append(brandField,quantityField,packField);
+    const supplier=node('select','manual-supplier-source');supplier.name='supplier';supplier.hidden=true;supplier.setAttribute('aria-label','Wholesaler');supplier.tabIndex=-1;for(const name of suppliers){const option=node('option','',name);option.value=name;option.selected=name===current.selectedSupplier;supplier.append(option);}
+    const brandStatus=node('p','manual-brand-status');brandStatus.setAttribute('role','status');brandStatus.setAttribute('aria-live','polite');brandStatus.hidden=true;
+    const quotePanel=node('section','manual-order-quote');quotePanel.setAttribute('aria-label','Selected supplier estimate');quotePanel.setAttribute('aria-live','polite');
+    const comparisonPanel=node('section','manual-order-comparison');comparisonPanel.setAttribute('aria-label','Wholesaler offers');
+    const offerTable=node('div','manual-offer-table');offerTable.setAttribute('role','radiogroup');offerTable.setAttribute('aria-label','Supplier offers');
+    const offerColumns=node('div','manual-offer-columns');offerColumns.setAttribute('aria-hidden','true');for(const label of ['Supplier / brand','Pack price / total','Available','Delivery estimate'])offerColumns.append(node('span','',label));
+    const offerRows=node('div','manual-offer-rows');offerTable.append(offerColumns,offerRows);
+    const pagination=node('div','manual-offer-pagination'),previous=node('button','btn manual-offer-prev','Previous'),pageLabel=node('span','manual-offer-page'),next=node('button','btn manual-offer-next','Next');previous.type=next.type='button';pageLabel.setAttribute('aria-live','polite');pagination.append(previous,pageLabel,next);comparisonPanel.append(offerTable,pagination);
+    const optionsView=node('section','manual-order-options-view');optionsView.hidden=true;optionsView.setAttribute('aria-label','Order options');const tabs=node('div','manual-options-tabs');tabs.setAttribute('role','tablist');
+    const notesSection=node('div','manual-options-section'),scenarioSection=node('div','manual-options-section'),medicineSection=node('div','manual-options-section');
+    const notesField=node('label','field');notesField.htmlFor=`${base}-notes`;notesField.append(node('span','','Order note (optional)'));const notes=node('textarea','');notes.id=`${base}-notes`;notes.name='notes';notes.maxLength=500;notes.rows=2;notes.placeholder='Note for this test order';notesField.append(notes);notesSection.append(notesField);
+    const scenarioField=node('label','field');scenarioField.htmlFor=`${base}-scenario`;scenarioField.append(node('span','','Test response'));const scenario=node('select','');scenario.id=`${base}-scenario`;scenario.name='scenario';for(const [value,text] of [['full','All packs accepted'],['partial','Some packs unavailable'],['unavailable','No packs available']]){const option=node('option','',text);option.value=value;scenario.append(option);}scenario.value='full';scenarioField.append(scenario);scenarioSection.append(scenarioField,node('small','','For testing only. No supplier is contacted.'));
+    const reference=node('p','manual-order-reference',packReference(selectedPack));reference.title=reference.textContent;medicineSection.append(reference);
+    const optionSections=[['Notes',notesSection],['Test response',scenarioSection],['Medicine details',medicineSection]];optionSections.forEach(([name,section],index)=>{const tab=node('button','manual-options-tab',name);tab.type='button';tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(index===0));tab.id=`${base}-option-tab-${index}`;tab.setAttribute('aria-controls',`${base}-option-panel-${index}`);section.id=`${base}-option-panel-${index}`;section.setAttribute('role','tabpanel');section.setAttribute('aria-labelledby',tab.id);section.hidden=index!==0;listen(tab,'click',()=>{optionSections.forEach(([,panel],panelIndex)=>panel.hidden=panelIndex!==index);for(const button of tabs.children)button.setAttribute('aria-selected',String(button===tab));});tabs.append(tab);});optionsView.append(tabs,notesSection,scenarioSection,medicineSection);
+    const footer=node('div','manual-order-footer'),chosen=node('div','manual-order-chosen'),chosenTotal=node('strong','','Select a supplier'),chosenInfo=node('small','');chosen.append(chosenTotal,chosenInfo);
     const message=node('p','manual-order-status');message.setAttribute('role','status');message.setAttribute('aria-live','polite');message.tabIndex=-1;
-    const actions=node('div','manual-order-actions'),add=node('button','btn manual-order-add','Add to basket'),send=node('button','btn btn-primary manual-order-send','Send now');add.type='button';send.type='submit';send.disabled=typeof onSend!=='function';actions.append(add,send);
-    form.append(packField,row,quotePanel,comparisonPanel,notesDetails,simulation,referenceDetails,node('p','manual-order-info','Send now orders only this item. Your basket stays unchanged.'),message,actions);body.append(form);
-    if(typeof onSend!=='function')message.textContent='Direct sending is unavailable. You can still add this item to the basket.';
-    const controls=[packSelect,quantity,supplier,scenario,notes,add,send,current.closeButton];
-    let quoteValue=null,quoteLoading=false,comparisonValue=null,comparisonKey=null;
-    const updateActions=()=>{send.disabled=typeof onSend!=='function'||isAdding||(typeof onQuote==='function'&&(quoteLoading||!quoteValue));add.disabled=isAdding||quoteLoading;};
+    const actions=node('div','manual-order-actions'),add=node('button','btn manual-order-add','Add to basket'),send=node('button','btn btn-primary manual-order-send','Send now');add.type='button';send.type='submit';actions.append(add,send);footer.append(chosen,message,actions);
+    form.append(toolbar,supplier,brandStatus,quotePanel,comparisonPanel,optionsView,footer);body.append(form);current.optionsButton.disabled=false;current.optionsButton.setAttribute('aria-expanded','false');current.optionsButton.textContent='More options';
+    let quoteValue=null,quoteLoading=false,comparisonValue=null,comparisonKey=null,brandOptions=[selectedPack],basePack=selectedPack,brandLoading=false,offerPage=0,optionsOpen=false;
+    const active=()=>alive&&medicineModal===current&&form.isConnected;
+    const controls=[packSelect,brand,quantity,supplier,scenario,notes,add,send,current.closeButton,current.optionsButton];
+    const brandLabel=pack=>[pack.brand||pack.name,pack.manufacturer].filter(Boolean).join(' · ');
+    const updateTitle=()=>{current.title.textContent=titleFor(selectedPack);current.title.title=current.title.textContent;reference.textContent=packReference(selectedPack);reference.title=reference.textContent;};
+    const renderBrands=()=>{brand.replaceChildren();brandOptions.forEach((pack,index)=>{const option=node('option','',brandLabel(pack));option.value=String(index);option.dataset.packId=pack.id;option.dataset.packType=pack.type;option.selected=pack.id===selectedPack.id&&pack.type===selectedPack.type;brand.append(option);});brand.title=brandLabel(selectedPack);};renderBrands();
+    const updateActions=()=>{send.disabled=typeof onSend!=='function'||isAdding||(typeof onQuote==='function'&&(quoteLoading||!quoteValue));add.disabled=isAdding||quoteLoading;brand.disabled=isAdding||brandLoading;};
     const quotePayload=()=>({id:selectedPack.id,type:selectedPack.type,query:selectedPack.name.slice(0,200),quantity:Number(quantity.value),supplier:supplier.value,scenario:scenario.value});
-    const renderQuote=quote=>{quotePanel.replaceChildren();const header=node('div','manual-order-quote-heading'),heading=node('h3','','Supplier estimate'),statusLabel=quote.status==='partial'?'Part available':quote.status==='unavailable'?'Unavailable':'Available';header.append(heading,node('span',`manual-order-quote-status is-${quote.status}`,statusLabel));const details=node('dl','manual-order-quote-details');for(const [label,value] of [['Coming from',supplierSource(quote.sourceLabel||quote.supplier,quote.delivery,quote.acceptedQuantity)],['Available',`${quote.acceptedQuantity} of ${quote.requestedQuantity} packs`],['Unavailable',`${quote.outstandingQuantity} packs`],['Test unit cost',money(quote.unitPrice)],['Accepted total',money(quote.estimatedTotal)]])details.append(node('dt','',label),node('dd','',String(value)));quotePanel.append(header,details,deliveryCard(quote.delivery,quote.acceptedQuantity),node('small','manual-order-compare-hint','Change wholesaler to compare its delivery estimate. Prices and availability are simulated.'));};
-    const useSupplier=name=>{if(isAdding||medicineModal!==current||!form.isConnected||![...supplier.querySelectorAll('option')].some(option=>option.value===name))return;supplier.value=name;current.selectedSupplier=name;edit();loadQuote();};
-    const renderComparison=result=>{
-      if(!result||!Array.isArray(result.quotes)||!result.quotes.length)throw new Error('The comparison response was incomplete. Please retry.');
-      const quotes=result.quotes.filter(quote=>quote&&typeof quote.supplier==='string'&&Number.isFinite(quote.unitPrice)&&Number.isFinite(quote.estimatedTotal)&&Number.isInteger(quote.acceptedQuantity)&&Number.isInteger(quote.requestedQuantity));
-      if(quotes.length!==result.quotes.length)throw new Error('The comparison response was incomplete. Please retry.');
-      const cheapest=Array.isArray(result.cheapestSuppliers)?result.cheapestSuppliers.filter(name=>quotes.some(quote=>quote.supplier===name&&quote.acceptedQuantity===quote.requestedQuantity)):[],recommended=cheapest.includes(result.recommendedSupplier)?result.recommendedSupplier:null,lowest=quotes.find(quote=>cheapest.includes(quote.supplier));
-      comparisonPanel.replaceChildren();const heading=node('div','manual-comparison-heading');heading.append(node('h3','','Compare wholesalers'));
-      heading.append(node('p','manual-comparison-note',lowest?cheapest.length>1?`Joint cheapest test total: ${money(lowest.estimatedTotal)} across ${cheapest.length} wholesalers.`:`Lowest test total: ${money(lowest.estimatedTotal)} from ${lowest.supplier}.`:'No wholesaler can supply all requested packs in this test response.'));comparisonPanel.append(heading);
-      const priceSummary=(quote,className)=>{const summary=node('div',className);summary.dataset.supplier=quote.supplier;const priceLine=node('div','manual-comparison-price-line');priceLine.append(node('strong','',money(quote.estimatedTotal)),deliveryBadge(quote.delivery,quote.acceptedQuantity));summary.append(priceLine,node('small','manual-comparison-price-source',supplierSource(quote.sourceLabel||quote.supplier,quote.delivery,quote.acceptedQuantity)));const status=deliveryStatus(quote.delivery,{acceptedQuantity:quote.acceptedQuantity}),arrival=arrivalLabel(status.estimatedArrivalAt);if(arrival)summary.append(node('small','manual-comparison-price-date','Estimated arrival · '+arrival));return summary;};
-      if(lowest)heading.append(priceSummary(lowest,'manual-comparison-lowest-summary'));
-      if(recommended){const suggestion=node('div','manual-comparison-recommendation'),description=node('div','manual-comparison-recommendation-description');description.append(node('p','',`Recommended: ${recommended}. Arrival estimates break ties between equal test prices.`),priceSummary(quotes.find(quote=>quote.supplier===recommended),'manual-comparison-recommended-summary'));suggestion.append(description);const use=node('button','btn btn-soft manual-comparison-use',recommended===supplier.value?'Recommended supplier selected':'Use recommended supplier');use.type='button';use.disabled=recommended===supplier.value;suggestion.append(use);listen(use,'click',()=>useSupplier(recommended));comparisonPanel.append(suggestion);}
-      const options=node('details','manual-comparison-options');options.append(node('summary','',`Compare ${quotes.length} wholesaler estimates`));const list=node('div','manual-comparison-list');list.setAttribute('role','list');
-      for(const quote of quotes){const isCheapest=cheapest.includes(quote.supplier),isRecommended=quote.supplier===recommended,row=node('article',`manual-comparison-row${isCheapest?' is-cheapest':''}${isRecommended?' is-recommended':''}`);row.setAttribute('role','listitem');
-        const source=node('div','manual-comparison-supplier');source.append(node('strong','',quote.supplier),node('small','',`${quote.acceptedQuantity} of ${quote.requestedQuantity} packs available`));const status=deliveryStatus(quote.delivery,{acceptedQuantity:quote.acceptedQuantity});if(status.depot)source.append(node('small','manual-comparison-depot',`Depot · ${status.depot}`));if(isCheapest)source.append(node('span','manual-comparison-badge',cheapest.length>1?'Joint cheapest test price':'Cheapest test price'));
-        const price=node('div','manual-comparison-price'),priceLine=node('div','manual-comparison-price-line');priceLine.append(node('strong','',money(quote.estimatedTotal)),deliveryBadge(quote.delivery,quote.acceptedQuantity));price.append(priceLine,node('small','',`${money(quote.unitPrice)} per pack · accepted total`));
-        const arrival=node('div','manual-comparison-arrival');arrival.append(node('strong','',quote.acceptedQuantity?arrivalLabel(status.estimatedArrivalAt)||'No arrival estimate':'No delivery expected'),node('small','',quote.acceptedQuantity?'Schedule estimate · UK time':'Unavailable packs are not backordered'));
-        const select=node('button','btn manual-comparison-use',quote.supplier===supplier.value?'Selected':'Select');select.type='button';select.disabled=quote.supplier===supplier.value;select.setAttribute('aria-label',`Choose ${quote.supplier} as wholesaler`);listen(select,'click',()=>useSupplier(quote.supplier));row.append(source,price,arrival,select);list.append(row);
+    const updateChosen=()=>{const count=Number(quantity.value);chosenTotal.textContent=quoteValue?money(quoteValue.estimatedTotal):quoteLoading?'Checking price…':'Price unavailable';chosenInfo.textContent=quoteValue?`${supplier.value} · ${quoteValue.acceptedQuantity} of ${quoteValue.requestedQuantity} packs`:`${supplier.value} · ${Number.isInteger(count)?count:'—'} ${count===1?'pack':'packs'}`;};
+    const quoteFor=name=>quoteValue?.supplier===name?quoteValue:comparisonValue?.quotes.find(quote=>quote.supplier===name);
+    const pageSize=()=>{const view=doc.defaultView,height=Number(view?.visualViewport?.height)||Number(view?.innerHeight)||800,width=Number(view?.visualViewport?.width)||Number(view?.innerWidth)||1200;current.dialog.style.setProperty('--manual-viewport-height',height+'px');current.layer.style.setProperty('--manual-viewport-height',height+'px');current.layer.style.height=height+'px';current.layer.style.top=(Number(view?.visualViewport?.offsetTop)||0)+'px';current.layer.style.bottom='auto';current.dialog.classList.toggle('is-short-viewport',height<=600);current.dialog.classList.toggle('is-tiny-viewport',height<=400);if(width<=680)return Math.max(1,Math.min(7,Math.floor((height-340-(packs.length>1?44:0))/64)));return height>=700?7:height>=640?5:height>600?4:height>500?3:height>440?2:1;};
+    function renderOffers(){
+      if(!active())return;const focusedSupplier=offerRows.contains(doc.activeElement)?doc.activeElement.closest('[data-supplier]')?.dataset.supplier:null;offerRows.replaceChildren();const size=pageSize(),pages=Math.ceil(suppliers.length/size);offerPage=Math.max(0,Math.min(offerPage,pages-1));
+      for(const name of suppliers.slice(offerPage*size,(offerPage+1)*size)){
+        const quote=quoteFor(name),selectedSupplier=name===supplier.value,row=node('button',`manual-offer-row manual-comparison-row${selectedSupplier?' is-selected':''}${comparisonValue?.cheapestSuppliers.includes(name)?' is-cheapest':''}${comparisonValue?.recommendedSupplier===name?' is-recommended':''}`);row.type='button';row.dataset.supplier=name;row.setAttribute('role','radio');row.setAttribute('aria-checked',String(selectedSupplier));row.disabled=isAdding;row.tabIndex=selectedSupplier?0:-1;
+        const source=node('span','manual-offer-supplier');source.append(node('strong',`supplier-tag ${name.toLowerCase()}`,name));const description=brandLabel(selectedPack);source.title=description;
+        if(comparisonValue?.recommendedSupplier===name||comparisonValue?.cheapestSuppliers.includes(name)){const recommended=comparisonValue.recommendedSupplier===name,marker=node('span','manual-offer-recommended',recommended?'Recommended':'Cheapest');marker.dataset.shortLabel=recommended?'Best':'Low';marker.title=marker.textContent;marker.setAttribute('aria-label',marker.textContent);source.append(marker);}
+        source.append(node('small','',description));
+        const price=node('span','manual-offer-price');price.append(node('strong','',quote?money(quote.unitPrice):'—'),node('small','',quote?money(quote.estimatedTotal)+' total':'Price unavailable'));
+        const availability=node('span','manual-offer-availability');availability.append(node('strong','',quote?`${quote.acceptedQuantity} / ${quote.requestedQuantity}`:'—'),node('small','','packs'));
+        const delivery=node('span','manual-offer-delivery'),status=deliveryStatus(quote?.delivery,{acceptedQuantity:quote?.acceptedQuantity??1}),arrival=arrivalLabel(status.estimatedArrivalAt);delivery.append(deliveryBadge(quote?.delivery,quote?.acceptedQuantity??1),node('small','',arrival|| (quote?.acceptedQuantity===0?'No delivery':'No arrival estimate')));delivery.title=arrival||status.label;
+        row.setAttribute('aria-label',`${name}, ${description}, ${quote?money(quote.unitPrice)+' per pack, '+money(quote.estimatedTotal)+' total, '+quote.acceptedQuantity+' of '+quote.requestedQuantity+' packs available':'price and availability unavailable'}, ${status.label}${arrival?', '+arrival:''}. Schedule estimate only.${comparisonValue?.recommendedSupplier===name?' Recommended among the cheapest offers.':comparisonValue?.cheapestSuppliers.includes(name)?' Cheapest offer.':''}`);row.title=row.getAttribute('aria-label');row.append(source,price,availability,delivery);listen(row,'click',()=>useSupplier(name));
+        listen(row,'keydown',event=>{if(!['ArrowDown','ArrowUp','ArrowRight','ArrowLeft','Home','End'].includes(event.key))return;event.preventDefault();const index=suppliers.indexOf(name),target=event.key==='Home'?0:event.key==='End'?suppliers.length-1:(index+(['ArrowDown','ArrowRight'].includes(event.key)?1:-1)+suppliers.length)%suppliers.length;offerPage=Math.floor(target/pageSize());useSupplier(suppliers[target]);offerRows.querySelector(`[data-supplier="${suppliers[target]}"]`)?.focus();});offerRows.append(row);
       }
-      options.append(list);comparisonPanel.append(options,node('p','manual-comparison-note',result.message||'Test prices and availability only. NHS dm+d reference prices are not supplier quotations. No supplier has been contacted.'));
-    };
-    const comparisonError=error=>{comparisonPanel.replaceChildren(node('p','manual-comparison-note',error?.message||'Could not compare wholesaler prices.'));const retry=node('button','btn btn-soft manual-comparison-retry','Retry price comparison');retry.type='button';listen(retry,'click',()=>{comparisonKey=null;comparisonValue=null;loadQuote();});comparisonPanel.append(retry);};
-    const loadQuote=()=>{
-      if(typeof onQuote!=='function'){quotePanel.hidden=true;return;}
-      clearTimeout(current.quoteTimer);const sequence=++current.quoteSequence;quoteValue=null;quoteLoading=true;quotePanel.replaceChildren(node('p','manual-order-quote-loading','Checking packs, price and delivery…'));updateActions();const payload=quotePayload(),nextComparisonKey=JSON.stringify([payload.type,payload.id,payload.quantity,payload.scenario]);
-      if(typeof onCompare==='function'){if(comparisonKey===nextComparisonKey&&comparisonValue)renderComparison(comparisonValue);else comparisonPanel.replaceChildren(node('p','manual-comparison-note','Comparing wholesaler test prices…'));}
-      if(!Number.isInteger(payload.quantity)||payload.quantity<1||payload.quantity>999){quoteLoading=false;quotePanel.replaceChildren(node('p','manual-order-quote-error','Enter a whole number of packs between 1 and 999 to check delivery.'));comparisonValue=null;comparisonKey=null;comparisonPanel.replaceChildren();updateActions();return;}
+      if(!offerRows.querySelector('[tabindex="0"]'))offerRows.firstElementChild?.setAttribute('tabindex','0');pagination.hidden=pages===1;previous.disabled=offerPage===0;next.disabled=offerPage===pages-1;pageLabel.textContent=`${offerPage+1} / ${pages} · ${suppliers.length} suppliers`;offerTable.dataset.pageSize=String(size);if(focusedSupplier)offerRows.querySelector(`[data-supplier="${focusedSupplier}"]`)?.focus();
+    }
+    function renderQuote(quote){
+      quotePanel.replaceChildren();const label=quote.status==='partial'?'Part available':quote.status==='unavailable'?'Unavailable':'Available';quotePanel.append(node('span',`manual-order-quote-status is-${quote.status}`,label),node('span','manual-order-selected-source',`${supplierSource(quote.sourceLabel||quote.supplier,quote.delivery,quote.acceptedQuantity)} · ${quote.acceptedQuantity} of ${quote.requestedQuantity} packs`));updateChosen();
+    }
+    function renderComparison(result){
+      if(!result||!Array.isArray(result.quotes)||!result.quotes.length)throw new Error('The comparison response was incomplete. Please retry.');
+      const quotes=result.quotes.filter(quote=>quote&&suppliers.includes(quote.supplier)&&Number.isFinite(quote.unitPrice)&&Number.isFinite(quote.estimatedTotal)&&Number.isInteger(quote.acceptedQuantity)&&Number.isInteger(quote.requestedQuantity));if(quotes.length!==result.quotes.length)throw new Error('The comparison response was incomplete. Please retry.');
+      const cheapest=Array.isArray(result.cheapestSuppliers)?result.cheapestSuppliers.filter(name=>quotes.some(quote=>quote.supplier===name&&quote.acceptedQuantity===quote.requestedQuantity)):[];comparisonValue={...result,quotes,cheapestSuppliers:cheapest,recommendedSupplier:cheapest.includes(result.recommendedSupplier)?result.recommendedSupplier:null};renderOffers();
+    }
+    function comparisonError(error){renderOffers();const retry=node('button','btn btn-soft manual-comparison-retry','Retry prices');retry.type='button';retry.title=error?.message||'Could not compare supplier prices.';listen(retry,'click',()=>{comparisonKey=null;comparisonValue=null;loadQuote();});quotePanel.append(retry);}
+    function useSupplier(name){if(isAdding||!active()||!suppliers.includes(name))return;supplier.value=name;current.selectedSupplier=name;edit();loadQuote();}
+    function loadQuote(){
+      if(!active())return;clearTimeout(current.quoteTimer);const sequence=++current.quoteSequence;quoteValue=null;quoteLoading=typeof onQuote==='function';quotePanel.replaceChildren(node('span','manual-order-quote-loading',quoteLoading?'Checking price and availability…':'Select a supplier to continue.'));updateActions();updateChosen();const payload=quotePayload(),nextComparisonKey=JSON.stringify([payload.type,payload.id,payload.quantity,payload.scenario]);
+      if(comparisonKey!==nextComparisonKey){comparisonValue=null;offerPage=0;}renderOffers();
+      if(!Number.isInteger(payload.quantity)||payload.quantity<1||payload.quantity>999){quoteLoading=false;quotePanel.replaceChildren(node('span','manual-order-quote-error','Enter 1–999 whole packs.'));comparisonValue=null;comparisonKey=null;renderOffers();updateActions();return;}
+      if(typeof onQuote!=='function'){updateActions();return;}
       current.quoteTimer=setTimeout(()=>{current.quoteChain=current.quoteChain.catch(()=>{}).then(async()=>{
-        if(!alive||medicineModal!==current||sequence!==current.quoteSequence||!form.isConnected)return;
+        if(!active()||sequence!==current.quoteSequence)return;
         try{
-          const quote=await onQuote(payload);if(!alive||medicineModal!==current||sequence!==current.quoteSequence||!form.isConnected)return;
-          if(!quote||!['accepted','partial','unavailable'].includes(quote.status)||!Number.isInteger(quote.acceptedQuantity)||!Number.isInteger(quote.requestedQuantity))throw new Error('The quote response was incomplete. Please retry.');quoteValue=quote;renderQuote(quote);
+          const quote=await onQuote(payload);if(!active()||sequence!==current.quoteSequence)return;
+          if(!quote||!['accepted','partial','unavailable'].includes(quote.status)||!Number.isInteger(quote.acceptedQuantity)||!Number.isInteger(quote.requestedQuantity))throw new Error('The quote response was incomplete. Please retry.');quoteValue=quote;renderQuote(quote);renderOffers();
           if(typeof onCompare==='function'){
-            try{if(comparisonKey!==nextComparisonKey||!comparisonValue){const compared=await onCompare(payload);if(!alive||medicineModal!==current||sequence!==current.quoteSequence||!form.isConnected)return;renderComparison(compared);comparisonValue=compared;comparisonKey=nextComparisonKey;}else renderComparison(comparisonValue);}
-            catch(error){if(alive&&medicineModal===current&&sequence===current.quoteSequence&&form.isConnected){comparisonValue=null;comparisonKey=null;comparisonError(error);}}
+            try{if(comparisonKey!==nextComparisonKey||!comparisonValue){const compared=await onCompare(payload);if(!active()||sequence!==current.quoteSequence)return;renderComparison(compared);comparisonKey=nextComparisonKey;}else renderOffers();}
+            catch(error){if(active()&&sequence===current.quoteSequence){comparisonValue=null;comparisonKey=null;comparisonError(error);}}
           }
         }catch(error){
-          if(!alive||medicineModal!==current||sequence!==current.quoteSequence||!form.isConnected)return;quotePanel.replaceChildren(node('p','manual-order-quote-error',error?.message||'Could not check this supplier.'));const retry=node('button','btn btn-soft manual-order-quote-retry','Retry supplier check');retry.type='button';quotePanel.append(retry);listen(retry,'click',loadQuote);
-        }finally{if(alive&&medicineModal===current&&sequence===current.quoteSequence&&form.isConnected){quoteLoading=false;updateActions();}}
+          if(!active()||sequence!==current.quoteSequence)return;quotePanel.replaceChildren(node('span','manual-order-quote-error',error?.message||'Could not check this supplier.'));const retry=node('button','btn btn-soft manual-order-quote-retry','Retry supplier check');retry.type='button';quotePanel.append(retry);listen(retry,'click',loadQuote);
+        }finally{if(active()&&sequence===current.quoteSequence){quoteLoading=false;updateActions();updateChosen();renderOffers();}}
       });},180);
-    };
-    const edit=()=>{current.attempt.invalidate();message.textContent='';message.classList.remove('is-error');};
-    listen(packSelect,'change',()=>{selectedPack=packs[Number(packSelect.value)]||null;reference.textContent=packReference(selectedPack);edit();loadQuote();});
-    listen(notes,'input',edit);listen(quantity,'input',()=>{edit();loadQuote();});
-    listen(supplier,'change',()=>{current.selectedSupplier=supplier.value;edit();loadQuote();});listen(scenario,'change',()=>{edit();loadQuote();});
+    }
+    function loadBrands(pack){
+      const sequence=current.brandSequence=(current.brandSequence||0)+1,key=pack.type+':'+pack.id;brandOptions=[pack];renderBrands();brandLoading=false;brand.disabled=false;brandStatus.hidden=true;if(!['AMPP','VMPP'].includes(pack.type))return;
+      brandLoading=true;brand.disabled=true;void (async()=>{try{const response=await request(`/api/dmd/brands?id=${encodeURIComponent(pack.id)}&type=${encodeURIComponent(pack.type)}`);if(!active()||sequence!==current.brandSequence||basePack.type+':'+basePack.id!==key||selectedPack.type+':'+selectedPack.id!==key)return;
+        if(!response?.ok)throw new Error('Brand alternatives unavailable. The selected pack is unchanged.');const options=normaliseDmdRecords(response.data?.packs).filter(record=>['AMPP','VMPP'].includes(record.type));if(!options.some(record=>record.id===pack.id&&record.type===pack.type))throw new Error('Brand alternatives unavailable. The selected pack is unchanged.');
+        selectedPack={...pack,...options.find(record=>record.id===pack.id&&record.type===pack.type),name:pack.name};brandOptions=[selectedPack,...options.filter(record=>record.id!==pack.id||record.type!==pack.type)];renderBrands();updateTitle();renderOffers();if(response.data?.truncated){brandStatus.textContent=`Showing ${brandOptions.length} exact-pack brand options.`;brandStatus.title=brandStatus.textContent;brandStatus.hidden=false;}
+      }catch(error){if(active()&&sequence===current.brandSequence){brandStatus.textContent=error?.message||'Brand alternatives unavailable. The selected pack is unchanged.';brandStatus.hidden=false;}}
+      finally{if(active()&&sequence===current.brandSequence){brandLoading=false;brand.disabled=isAdding;}}})();
+    }
+    function edit(){current.attempt.invalidate();message.textContent='';message.classList.remove('is-error');}
+    listen(brand,'change',()=>{if(isAdding||!active())return;const pack=brandOptions[Number(brand.value)];if(!pack)return;selectedPack=pack;brand.title=brandLabel(pack);updateTitle();edit();loadQuote();});
+    listen(packSelect,'change',()=>{const pack=packs[Number(packSelect.value)];if(!pack||isAdding)return;basePack=selectedPack=pack;updateTitle();edit();loadQuote();loadBrands(pack);});
+    listen(quantity,'input',()=>{edit();loadQuote();});listen(notes,'input',edit);listen(supplier,'change',()=>useSupplier(supplier.value));listen(scenario,'change',()=>{edit();loadQuote();});
+    listen(previous,'click',()=>{if(offerPage>0){offerPage--;renderOffers();}});listen(next,'click',()=>{if((offerPage+1)*pageSize()<suppliers.length){offerPage++;renderOffers();}});
+    const resize=()=>{if(!alive||medicineModal!==current)return;const size=pageSize();if(active()){offerPage=Math.min(offerPage,Math.ceil(suppliers.length/size)-1);renderOffers();}};if(doc.defaultView){listen(doc.defaultView,'resize',resize);if(doc.defaultView.visualViewport)listen(doc.defaultView.visualViewport,'resize',resize);}
+    listen(current.optionsButton,'click',()=>{if(!active())return;optionsOpen=!optionsOpen;current.optionsButton.textContent=optionsOpen?'Back to offers':'More options';current.optionsButton.setAttribute('aria-expanded',String(optionsOpen));toolbar.hidden=quotePanel.hidden=comparisonPanel.hidden=optionsOpen;optionsView.hidden=!optionsOpen;if(optionsOpen)tabs.querySelector('[aria-selected="true"]')?.focus();});
     const submit=async kind=>{
-      if(isAdding||!selectedPack||medicineModal!==current)return;
-      let payload;try{payload=current.attempt.prepare(selectedPack,{quantity:quantity.value,supplier:supplier.value,notes:notes.value,scenario:scenario.value});}catch(error){message.textContent=error.message;message.classList.add('is-error');quantity.focus();return;}
-      if(kind==='sent'&&typeof onSend!=='function')return;
-      if(quoteLoading||kind==='sent'&&typeof onQuote==='function'&&!quoteValue){message.textContent='Check the supplier estimate before sending. You can retry the supplier check above.';return;}
-      const pack=selectedPack;isAdding=true;controls.forEach(control=>control.disabled=true);message.classList.remove('is-error');message.textContent=kind==='sent'?'Sending test order…':'Adding to basket…';message.focus();send.textContent=kind==='sent'?'Sending…':'Send now';add.textContent=kind==='added'?'Adding…':'Add to basket';
-      try{
-        const result=await (kind==='sent'?onSend(payload):onAdd(payload));
-        if(kind==='sent'&&(!result?.order?.id||typeof result.order.id!=='string'))throw new Error('The order response was incomplete. Try again to check the same request.');
-        current.attempt.complete();if(alive&&medicineModal===current){renderModalResult(kind,result,payload.quantity,pack);setStatus(kind==='sent'?`Test order ${result.order.id}: ${result.order.fulfilment?.status||'accepted'}.`:`${payload.quantity} packs added to the test basket.`);}
-      }catch(error){if(alive&&medicineModal===current){message.textContent=error?.message||'The request could not be completed. Try again.';message.classList.add('is-error');onError(error);}}
-      finally{isAdding=false;if(alive&&medicineModal===current&&form.isConnected){controls.forEach(control=>control.disabled=false);updateActions();send.textContent='Send now';add.textContent='Add to basket';if(message.classList.contains('is-error'))send.focus();}}
+      if(isAdding||!selectedPack||!active())return;let payload;try{payload=current.attempt.prepare(selectedPack,{quantity:quantity.value,supplier:supplier.value,notes:notes.value,scenario:scenario.value});}catch(error){message.textContent=error.message;message.classList.add('is-error');quantity.focus();return;}
+      if(kind==='sent'&&typeof onSend!=='function')return;if(quoteLoading||kind==='sent'&&typeof onQuote==='function'&&!quoteValue){message.textContent='Check the supplier estimate before sending. Retry the supplier check above.';return;}
+      const pack=selectedPack;isAdding=true;controls.forEach(control=>control.disabled=true);renderOffers();message.classList.remove('is-error');message.textContent=kind==='sent'?'Sending test order…':'Adding to basket…';send.textContent=kind==='sent'?'Sending…':'Send now';add.textContent=kind==='added'?'Adding…':'Add to basket';
+      try{const result=await (kind==='sent'?onSend(payload):onAdd(payload));if(kind==='sent'&&(!result?.order?.id||typeof result.order.id!=='string'))throw new Error('The order response was incomplete. Try again to check the same request.');current.attempt.complete();if(active()){renderModalResult(kind,result,payload.quantity,pack);setStatus(kind==='sent'?`Test order ${result.order.id}: ${result.order.fulfilment?.status||'accepted'}.`:`${payload.quantity} packs added to the test basket.`);}}
+      catch(error){if(active()){message.textContent=error?.message||'The request could not be completed. Try again.';message.classList.add('is-error');onError(error);}}
+      finally{isAdding=false;if(active()){controls.forEach(control=>control.disabled=false);updateActions();renderOffers();send.textContent='Send now';add.textContent='Add to basket';}}
     };
-    listen(add,'click',event=>{event.preventDefault();void submit('added');});
-    listen(form,'submit',event=>{event.preventDefault();event.stopPropagation();void submit('sent');});
-    loadQuote();
+    listen(add,'click',event=>{event.preventDefault();void submit('added');});listen(form,'submit',event=>{event.preventDefault();event.stopPropagation();void submit('sent');});
+    loadQuote();loadBrands(basePack);
   }
   async function chooseMatch(index,initialQuantity=1){
     const match=matches[index];if(!match||isAdding)return;

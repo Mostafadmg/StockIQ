@@ -21,7 +21,7 @@ Open `http://localhost:3000`. Deep links including `/daily-orders`, `/inventory`
 
 1. Open **Manual Orders** and type at least two characters, such as `amoxicillin 500` or a brand name.
 2. Set the quantity beside a matching pack and use **Add to basket** to add it directly. The same shortcut is available in the order-items list below search. This does not open a modal or send an order.
-3. Alternatively, choose the medicine name to open its ordering modal, showing the NHS identifier, pack, manufacturer and available reference price. Set the pack quantity and test supplier. **Send now** creates an order for only that item and shows the result inside the modal, without changing the existing basket. **Add to basket** is also available inside the modal.
+3. Alternatively, choose the medicine name to open the compact ordering modal. Choose a matching NHS brand/manufacturer and quantity, then select a supplier row showing its returned price, availability and next-delivery estimate. **Send now** creates an order for only that item and shows the result inside the modal, without changing the existing basket. **Add to basket** is also available inside the modal.
 4. Open **Basket** to navigate to the full **Order review** page at `/review`. Edit quantities and test suppliers, sort or remove lines, and save a draft. With no explicit selection, all ready lines are included; select lines to submit only those and keep the rest in the basket. **Submit to wholesalers** creates only isolated test orders. Receive test orders in **Goods In** to update test shelf stock.
 
 Medicine and pack data are real reference records. Supplier costs and stock are simulated: newly imported packs use an explicitly labelled £1 test cost and start at zero shelf stock. Tariff/list reference prices are shown separately and are not wholesale quotations. Quantities entered for orders/receipts are whole packs; the dm+d quantity/unit describes the contents of one pack.
@@ -108,3 +108,6 @@ Manual Orders uses a focused single-column layout with a padded medicine-search 
 
 
 Cheapest-price comparisons show colour-coded delivery estimates: green for same/next working day, yellow for longer arrivals or an explicitly configured Birmingham dispatch depot. Set the optional depot and working-day offset per van in Advanced → Delivery Times. These remain schedule estimates and test prices; a depot is never inferred from a wholesaler name.
+
+
+The medicine modal shows a single supplier list with its quantity and ordering actions kept in view. Short viewports use offer-page buttons. More options replaces the offer view for notes, test responses and medicine details. Brand choices come from the exact same dm+d VMPP pack family; supplier prices continue to come from the test quote API and are not inferred from NHS reference prices.
