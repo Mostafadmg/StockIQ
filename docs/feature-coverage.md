@@ -55,3 +55,8 @@ The 12 Advanced/Tools pages are Branch Usage, Fast Lines, Delivery Times, Stock 
 Browser requests must use relative `/api/...` paths on the draft's own origin. Do not accept an arbitrary API base URL from query parameters, saved settings, or untrusted content. Do not proxy requests to the original site. Tests and fixtures must remain self-contained and use synthetic records.
 
 The repository is intended as a reviewable starting point. Production parity would require the original source, documented API contracts, supplier test accounts, real authentication and authorization, durable storage, integration tests, and explicit validation of each production workflow.
+
+
+## Mellons catalogue update
+
+Manual Orders now queries the same `search-drug-tariff` lookup used by the Mellons daily repository. The dropdown includes medicine name and pack size, selection, pack quantity, keyboard navigation, loading/error/empty states and real tariff reference prices. Added packs participate in basket, draft, test order, partial/full receiving, history and stock counts. Lookup is read-only; every order and stock write remains in the clone. The available lookup returns Drug Tariff records without dm+d/SNOMED identifiers; generated pack hashes are internal IDs. Wholesale prices and stock remain simulated. Source/API tests cover this flow; managed browser QA is unavailable in this session.

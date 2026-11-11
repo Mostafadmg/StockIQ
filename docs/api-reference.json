@@ -378,5 +378,41 @@
       },
       "body": {}
     }
-  ]
+  ],
+  "catalogueIntegration": {
+    "source": "Existing Mellons search-drug-tariff edge function",
+    "readOnly": true,
+    "identifierNotice": "TARIFF hashes are internal name/brand/pack identifiers, not dm+d/SNOMED codes",
+    "configuration": [
+      "MELLONS_SUPABASE_URL",
+      "MELLONS_SUPABASE_PUBLISHABLE_KEY"
+    ],
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/api/dmd/search?q=amoxicillin",
+        "returns": "data.matches with id,type TARIFF,name,pack,referencePrice GBP,tariffMonth"
+      },
+      {
+        "method": "GET",
+        "path": "/api/dmd/packs?id=:id&type=TARIFF&query=:name",
+        "returns": "data.packs for a selected reference pack"
+      },
+      {
+        "method": "POST",
+        "path": "/api/catalogue/import",
+        "body": {
+          "id": "32-character reference hash",
+          "type": "TARIFF",
+          "query": "Canonical medicine name"
+        },
+        "returns": "Validated reference product in workspace; simulated supplier price and stock"
+      }
+    ],
+    "errors": {
+      "503": "Catalogue unconfigured, rejected read credentials, timeout or upstream unavailable",
+      "409": "Selection expired; reselect a medicine"
+    },
+    "writes": "Reference imports, baskets, orders and receiving mutate only the clone workspace"
+  }
 }

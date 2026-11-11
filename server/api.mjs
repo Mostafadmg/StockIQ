@@ -1,8 +1,10 @@
-/** StockIQ isolated test API. No production hosts or supplier connectors are used. */
+/** StockIQ isolated ordering API. Only the reference catalogue is read remotely. */
+import {searchDmd,getDmdPacks,getDmdPack,tariffPackId} from './dmd.mjs';
 const sessions = new Map();
 const MAX_SESSIONS = 160;
 const MAX_BODY = 256 * 1024;
 const MAX_RECORDS = 200;
+const MAX_IMPORTED_PRODUCTS = 200;
 const suppliers = ['Phoenix', 'Alliance', 'AAH', 'BNS', 'Sigma'];
 const productRows = [
   ['Paracetamol 500mg tablets','32','1000011',0.74,4,6,'Phoenix','OTC',true,12],
@@ -58,7 +60,21 @@ function product(w,id) { const p=w.products.find(p=>p.id===id);if(!p)fail('Produ
 function order(w,id) { const o=w.orders.find(o=>o.id===id);if(!o)fail('Order not found.',404);return o; }
 function capacity(list,label){if(list.length>=MAX_RECORDS)fail(`${label} limit reached. Reset this test workspace to continue.`,409);}
 function nextId(list,prefix,start=1000){return `${prefix}-${Math.max(start,...list.map(x=>Number(x.id?.split('-').pop())||start))+1}`;}
-function checkSettings(data,defaults) {
+function catalogueIdentity(id,type) {
+  if(type!=='TARIFF'||typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id))fail('Choose a valid Drug Tariff pack from the reference search.');
+  return {id,type};
+}
+function catalogueProduct(pack,supplier='Phoenix') {
+  if(!pack||typeof pack!=='object')fail('Reference pack is unavailable.',502);
+  const {id,type}=catalogueIdentity(pack.id,pack.type);
+  const name=string(pack.name,500,'Product name'),size=string(String(pack.pack??''),120,'Pack size');
+  const result={id:`catalogue-${type}-${id}`,catalogueId:id,catalogueType:type,name,pack:size,pip:'',price:1,priceSource:'simulation',stock:0,owed:0,supplier:suppliers.includes(supplier)?supplier:'Phoenix',category:'Prescription',fast:false,target:5,source:'NHS Drug Tariff'};
+  if(typeof pack.referencePrice==='number'&&Number.isFinite(pack.referencePrice)&&pack.referencePrice>=0&&pack.referencePrice<=100000)result.referencePrice=money(pack.referencePrice);
+  if(typeof pack.tariffMonth==='string'&&pack.tariffMonth.length<=40)result.tariffMonth=pack.tariffMonth;
+  if(typeof pack.brand==='string'&&pack.brand.length<=200)result.brand=pack.brand;
+  return result;
+}
+function checkSettings(data,defaults,products=PRODUCTS) {
   if(!data||typeof data!=='object'||Array.isArray(data))fail('Settings must be an object.');
   const result={...defaults};
   for(const [k,v] of Object.entries(data)) {
@@ -77,14 +93,14 @@ function checkSettings(data,defaults) {
       }
     }
     if(k==='fastTargets'){
-      if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length>PRODUCTS.length)fail('Fast targets must be a bounded product map.');
-      for(const [id,target] of Object.entries(v)){if(!PRODUCTS.some(p=>p.id===id))fail('Unknown fast target product.');integer(target,0,999,'Fast target');}
+      if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length>products.length)fail('Fast targets must be a bounded product map.');
+      for(const [id,target] of Object.entries(v)){if(!products.some(p=>p.id===id))fail('Unknown fast target product.');integer(target,0,999,'Fast target');}
     }
     if(k==='surplusOffers'){
       if(!Array.isArray(v)||v.length>MAX_RECORDS)fail('Too many sample surplus offers.');
       for(const offer of v){
         if(!offer||typeof offer!=='object'||Array.isArray(offer)||Object.keys(offer).length>10)fail('Invalid sample surplus offer.');
-        if(!PRODUCTS.some(p=>p.id===offer.productId))fail('Unknown surplus product.');integer(offer.quantity);
+        if(!products.some(p=>p.id===offer.productId))fail('Unknown surplus product.');integer(offer.quantity);
         if(JSON.stringify(offer).length>1000)fail('Sample surplus offer is too large.');
       }
     }
@@ -92,18 +108,25 @@ function checkSettings(data,defaults) {
   }
   return result;
 }
-function restoreWorkspace(input) {
+async function restoreWorkspace(input) {
   if(!input||typeof input!=='object'||Array.isArray(input)||input.version!==1)fail('Invalid workspace snapshot.');
   const w=seedWorkspace();
-  if(!Array.isArray(input.products)||input.products.length!==PRODUCTS.length)fail('Invalid snapshot products.');
+  if(!Array.isArray(input.products)||input.products.length<PRODUCTS.length||input.products.length>PRODUCTS.length+MAX_IMPORTED_PRODUCTS)fail('Invalid snapshot products.');
   const seen=new Set();
-  w.products=input.products.map(p=>{
+  w.products=await Promise.all(input.products.map(async p=>{
     if(!p||seen.has(p.id))fail('Invalid snapshot products.');seen.add(p.id);
-    const original=PRODUCTS.find(o=>o.id===p.id);if(!original)fail('Unknown snapshot product.');
+    let original=PRODUCTS.find(o=>o.id===p.id);
+    if(!original){
+      const identity=catalogueIdentity(p.catalogueId,p.catalogueType);
+      if(p.id!==`catalogue-${identity.type}-${identity.id}`||p.source!=='NHS Drug Tariff')fail('Unknown snapshot product.');
+      original=catalogueProduct({id:identity.id,type:identity.type,name:p.name,pack:p.pack,referencePrice:p.referencePrice,tariffMonth:p.tariffMonth,brand:p.brand},p.supplier);
+      if(await tariffPackId(original.name,original.brand||'',original.pack)!==identity.id)fail('Snapshot reference product does not match its catalogue identity.');
+    }
     return {...copy(original),stock:integer(p.stock,0,9999,'Stock'),owed:integer(p.owed,0,999,'Owed'),target:integer(p.target,0,999,'Target')};
-  });
+  }));
+  if(PRODUCTS.some(p=>!seen.has(p.id)))fail('Snapshot is missing sample products.');
   function items(input){
-    if(!Array.isArray(input)||input.length>PRODUCTS.length)fail('Invalid snapshot items.');
+    if(!Array.isArray(input)||input.length>w.products.length)fail('Invalid snapshot items.');
     const ids=new Set();return input.map(i=>{if(!i||ids.has(i.id))fail('Duplicate snapshot item.');ids.add(i.id);const p=product(w,i.id);return {...copy(p),quantity:integer(i.quantity),received:integer(i.received??0,0,i.quantity,'Received')};});
   }
   function records(key){if(!Array.isArray(input[key])||input[key].length>MAX_RECORDS)fail(`Invalid snapshot ${key}.`);return input[key];}
@@ -121,7 +144,7 @@ function restoreWorkspace(input) {
   w.feedback=records('feedback').map(f=>({id:string(f.id,40,'Feedback ID'),productId:product(w,f.productId).id,message:string(f.message,500,'Feedback'),createdAt:validDate(f.createdAt)?f.createdAt:iso()}));
   const stockCounts=input.stockCounts??[];if(!Array.isArray(stockCounts)||stockCounts.length>MAX_RECORDS)fail('Invalid snapshot stock counts.');
   w.stockCounts=stockCounts.map(c=>{if(!c||!validDate(c.createdAt))fail('Invalid stock count.');return {productId:product(w,c.productId).id,quantity:integer(c.quantity,0,9999,'Stock'),previous:integer(c.previous,0,9999,'Previous stock'),createdAt:c.createdAt};});
-  w.settings=checkSettings(input.settings,w.settings);return w;
+  w.settings=checkSettings(input.settings,w.settings,w.products);return w;
 }
 function reply(data,status=200,w){return Response.json({data,...(w?{workspace:copy(w)}:{}),production:false},{status,headers:{'cache-control':'no-store','x-stockiq-sandbox':'true','x-production':'false'}});}
 async function body(request){
@@ -135,19 +158,37 @@ function analytics(w){
   return {totalSpend:spend,totalOrders:orders.length,awaiting:orders.filter(o=>o.status!=='Received').length,received:orders.filter(o=>o.status==='Received').length,lowStock:w.products.filter(p=>p.stock<p.target).length,basketTotal:total(w.basket),savings:money(spend*.12),bySupplier,trend:[{day:'Mon',value:24.18},{day:'Tue',value:36.42},{day:'Wed',value:28.7},{day:'Thu',value:49.5},{day:'Fri',value:33.6},{day:'Sat',value:18.2},{day:'Sun',value:spend}],topProducts:w.products.filter(p=>p.fast).slice(0,5)};
 }
 /** All writes target the caller's isolated, synthetic workspace. */
-export async function handleApi(request) {
+export async function handleApi(request,env={}) {
   const url=new URL(request.url);const path=url.pathname.replace(/\/$/,'');const method=request.method.toUpperCase();
   if(!path.startsWith('/api/'))return null;
   try{
     if(path==='/api/health'&&method==='GET')return reply({status:'ok',mode:'sandbox',version:'1.0.0',supplierConnections:0});
     if(path==='/api/workspaces'&&method==='POST'){
       const data=await body(request);const id=string(data.id,80,'Workspace ID');if(!/^[\w-]{8,80}$/.test(id))fail('Workspace ID must contain 8–80 letters, numbers, underscores or hyphens.');
-      const w=data.workspace?restoreWorkspace(data.workspace):sessions.has(id)?sessions.get(id):seedWorkspace();
+      const w=data.workspace?await restoreWorkspace(data.workspace):sessions.has(id)?sessions.get(id):seedWorkspace();
       if(!sessions.has(id)&&sessions.size>=MAX_SESSIONS)sessions.delete(sessions.keys().next().value);
       sessions.set(id,w);return reply({id},201,w);
     }
     const id=request.headers.get('x-workspace-id');const w=id&&sessions.get(id);
     if(!w)fail('Test workspace is not initialized. Restore or create it with POST /api/workspaces.',409,'SESSION_EXPIRED');
+    if(path==='/api/dmd/search'&&method==='GET'){
+      const query=(url.searchParams.get('q')||'').trim();if(query.length>200)fail('Search must be at most 200 characters.');
+      return reply(query.length<2?{matches:[],source:'NHS Drug Tariff'}:await searchDmd(query,env),200,w);
+    }
+    if(path==='/api/dmd/packs'&&method==='GET'){
+      const reference=url.searchParams.get('id'),type=url.searchParams.get('type');catalogueIdentity(reference,type);
+      const hint=(url.searchParams.get('query')||'').trim();if(hint.length>200)fail('Search hint must be at most 200 characters.');
+      return reply(await getDmdPacks(reference,type,env,hint),200,w);
+    }
+    if(path==='/api/catalogue/import'&&method==='POST'){
+      const data=await body(request);const identity=catalogueIdentity(data.id,data.type),key=`catalogue-${identity.type}-${identity.id}`;
+      if(data.query!=null&&(typeof data.query!=='string'||data.query.length>200))fail('Search hint must be at most 200 characters.');
+      const existing=w.products.find(p=>p.id===key);if(existing)return reply(existing,200,w);
+      if(w.products.length>=PRODUCTS.length+MAX_IMPORTED_PRODUCTS)fail('Reference product limit reached. Reset this test workspace to continue.',409);
+      const pack=await getDmdPack(identity.id,identity.type,env,data.query?.trim());
+      if(pack?.id!==identity.id||pack?.type!==identity.type)fail('Reference lookup returned a different product.',502);
+      const p=catalogueProduct(pack,w.settings.preferredSupplier);w.products.push(p);return reply(p,201,w);
+    }
     if(path==='/api/workspace'&&method==='GET')return reply(w,200,w);
     if(path==='/api/reset'&&method==='POST'){const reset=seedWorkspace();sessions.set(id,reset);return reply({reset:true},200,reset);}
     if(path==='/api/products'&&method==='GET'){
@@ -218,7 +259,7 @@ export async function handleApi(request) {
     if(stockMatch&&method==='POST'){const p=product(w,stockMatch[1]);const quantity=integer((await body(request)).quantity,0,9999,'Stock');capacity(w.stockCounts,'Stock count');w.stockCounts.unshift({productId:p.id,quantity,previous:p.stock,createdAt:iso()});p.stock=quantity;return reply(p,200,w);}
     if(path==='/api/analytics'&&method==='GET')return reply(analytics(w),200,w);
     if(path==='/api/settings'&&method==='GET')return reply(w.settings,200,w);
-    if(path==='/api/settings'&&method==='PATCH'){const next=checkSettings(await body(request),w.settings);w.settings=next;return reply(next,200,w);}
+    if(path==='/api/settings'&&method==='PATCH'){const next=checkSettings(await body(request),w.settings,w.products);w.settings=next;return reply(next,200,w);}
     if(path==='/api/notifications'&&method==='GET')return reply([
       {id:'n1',type:'delivery',title:'Deliveries ready to receive',message:`${w.orders.filter(o=>o.status!=='Received').length} test orders are awaiting stock receipt.`,route:'goods-in'},
       {id:'n2',type:'stock',title:'Low stock review',message:`${w.products.filter(p=>p.stock<p.target).length} sample products are below target stock.`,route:'needs-attention'},
