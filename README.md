@@ -31,7 +31,7 @@ Medicine and pack data are real reference records. Supplier costs and stock are 
 The original main tabs and menus are reproduced:
 
 - Auto Orders: pending/fast/OTC lines, shelf counts, selections and basket actions.
-- Manual Orders: searchable dm+d packs, a live basket/order-items list and a fixed basket summary.
+- Manual Orders: searchable dm+d packs, Ordered, Rejected / unobtainable and Basket tabs and a fixed basket summary.
 - Goods In: supplier cards, receipt queue and invoice references, Claims, Analytics and Settings.
 - History: grouped order/line timeline, status/supplier/date filters, reorder and spend summary.
 - Advanced: Branch Usage, Fast Lines, Delivery Times, Stock Count, Smart Orders, Analytics and Surplus.
@@ -104,4 +104,4 @@ Order results show the supplying test wholesaler, supplier reference, requested/
 Supplier comparison reports the lowest test total for the full pack quantity and breaks price ties using the earliest known delivery estimate. Current supplier prices may all tie; reference/list prices from dm+d remain separate from simulated supplier costs.
 
 
-Manual Orders uses a focused single-column layout with a padded medicine-search card. The scanner section and Workspace products sidebar have been removed. Medicine names open ordering options; adjacent Add to basket controls remain available. Items actually added to the basket or submitted as orders appear below search immediately, including sample products. The list shows the saved order status and quantities; preview-only catalogue imports are excluded. Quantity editing keeps the dropdown open and preserves entered pack counts.
+Manual Orders uses a focused single-column layout with a padded medicine-search card. The scanner section and Workspace products sidebar have been removed. Medicine names open ordering options; adjacent Add to basket controls remain available. Items actually added to the basket or submitted as orders appear below search immediately, including sample products. Ordered opens by default; Rejected / unobtainable shows unsupplied packs, and Basket holds unsent lines. Tab counts are medicine-line counts. Partial orders show accepted packs under Ordered and only the unaccepted packs under Rejected. The Basket tab lets you edit quantities and wholesalers, remove items and explicitly send the test basket without leaving Manual Orders. The bottom View basket button opens this tab; the header basket still provides the full review page. Preview-only catalogue imports are excluded. Quantity editing keeps the dropdown open and preserves entered pack counts.
