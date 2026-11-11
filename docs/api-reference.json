@@ -418,5 +418,82 @@
     "writes": "Only browser workspace reference imports, basket, order and receipt state changes; no supplier or original-stock writes",
     "hosting": "POST /api/dispatch carries id,workspace snapshot,logical method,path,data; preserves logical statuses and returned workspace",
     "security": "No TRUD key in code, browser or deployment; no live supplier calls"
-  }
+  },
+  "reconstructedFeatureRoutes": [
+    {
+      "method": "GET/PATCH",
+      "path": "/api/fast-lines",
+      "purpose": "Cover, rounding, products, target modes and targets"
+    },
+    {
+      "method": "GET",
+      "path": "/api/delivery-vans",
+      "purpose": "Supplier van schedules"
+    },
+    {
+      "method": "PUT/PATCH",
+      "path": "/api/delivery-vans/:supplier",
+      "purpose": "Save multiple vans with days, cutoff, arrival and offset"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reviews/entries",
+      "purpose": "Weekly review stockout/overstock entries (GET review via /api/reviews)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reviews/submit",
+      "purpose": "Save reviewed notes and submission timestamp locally"
+    },
+    {
+      "method": "GET/POST",
+      "path": "/api/waste",
+      "purpose": "Waste records and atomic test stock adjustment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/slow-movers/evaluate",
+      "purpose": "Sample movement rule evaluation"
+    },
+    {
+      "method": "GET/PATCH",
+      "path": "/api/goods-settings",
+      "purpose": "Default supplier, resolved claims and invoice requirement"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/claims/:id",
+      "purpose": "Workflow status and local credit"
+    },
+    {
+      "method": "POST",
+      "path": "/api/basket/cascade",
+      "purpose": "Non-mutating simulated supplier comparisons"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/cascade",
+      "purpose": "Atomic split test orders from reviewed allocations"
+    },
+    {
+      "method": "GET",
+      "path": "/api/surplus",
+      "purpose": "Local offers, transfers and statement"
+    },
+    {
+      "method": "POST/DELETE",
+      "path": "/api/surplus/offers[/:id]",
+      "purpose": "Local share offers"
+    },
+    {
+      "method": "POST",
+      "path": "/api/surplus/transfers[/:id/dispatch|confirm]",
+      "purpose": "Local transfer lifecycle and stock adjustment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/support",
+      "purpose": "Workspace-only notes; no message to external support"
+    }
+  ]
 }

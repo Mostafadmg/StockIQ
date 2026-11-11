@@ -5,7 +5,7 @@ const MAX_SESSIONS = 160;
 const MAX_BODY = 256 * 1024;
 const MAX_RECORDS = 200;
 const MAX_IMPORTED_PRODUCTS = 200;
-const suppliers = ['Phoenix', 'Alliance', 'AAH', 'BNS', 'Sigma'];
+const suppliers = ['Phoenix', 'Alliance', 'AAH', 'BNS', 'Sigma', 'Trident', 'Warehouse'];
 const productRows = [
   ['Paracetamol 500mg tablets','32','1000011',0.74,4,6,'Phoenix','OTC',true,12],
   ['Amoxicillin 500mg capsules','21','1000029',1.48,2,4,'Alliance','Prescription',true,10],
@@ -44,7 +44,7 @@ export function seedWorkspace() {
   const a = [line(products,0,6),line(products,3,5),line(products,7,4)];
   const b = [line(products,2,8,8),line(products,5,6,6)];
   const c = [line(products,11,5,2),line(products,14,3,0)];
-  return {version:1,products,basket:[],orders:[
+  return {version:1,products,features:seedFeatures(products),basket:[],orders:[
     {id:'TEST-1001',supplier:'Phoenix',items:a,total:total(a),status:'Awaiting',createdAt:dated(0),source:'auto',notes:'Sample test order · no supplier connection'},
     {id:'TEST-1002',supplier:'Alliance',items:b,total:total(b),status:'Received',createdAt:dated(2),receivedAt:dated(1),source:'manual',notes:'Completed sample delivery'},
     {id:'TEST-1003',supplier:'AAH',items:c,total:total(c),status:'Part received',createdAt:dated(1),source:'manual',notes:'Sample partial delivery'}
@@ -60,6 +60,49 @@ function product(w,id) { const p=w.products.find(p=>p.id===id);if(!p)fail('Produ
 function order(w,id) { const o=w.orders.find(o=>o.id===id);if(!o)fail('Order not found.',404);return o; }
 function capacity(list,label){if(list.length>=MAX_RECORDS)fail(`${label} limit reached. Reset this test workspace to continue.`,409);}
 function nextId(list,prefix,start=1000){return `${prefix}-${Math.max(start,...list.map(x=>Number(x.id?.split('-').pop())||start))+1}`;}
+function seedFeatures(products) {
+  return {fastLines:{coverDays:8,roundTo:5,ids:products.filter(p=>p.fast).map(p=>p.id),modes:{},targets:{}},deliveryVans:Object.fromEntries(['AAH','Alliance','Phoenix','BNS'].map((supplier,index)=>[supplier,[{id:`van-${index+1}`,days:[1,2,3,4,5,6],cutoff:['19:00','18:30','12:45','17:00'][index],arrival:['09:00','10:30','14:00','11:00'][index],offset:1}]])),review:{entries:[],notes:'',submittedAt:null},waste:[],slowMovers:{evaluatedAt:null,productIds:[]},goodsSettings:{defaultSupplier:'Phoenix',showResolved:false,requireInvoice:false},support:[],surplus:{offers:[],transfers:[]}};
+}
+function featureObject(value,label,keys){if(!value||typeof value!=='object'||Array.isArray(value))fail(`${label} must be an object.`);if(keys&&Object.keys(value).some(key=>!keys.includes(key)))fail(`${label} contains an unknown field.`);return value;}
+function optionalText(value,max=500,label='Notes'){if(value==null)return '';if(typeof value!=='string'||value.length>max)fail(`${label} must be at most ${max} characters.`);return value.trim();}
+function featureDate(value,label='Date'){if(!validDate(value))fail(`${label} is invalid.`);return value;}
+function featureId(value,prefix,label){const id=string(value,80,label);if(!new RegExp(`^${prefix}-[0-9]{4,9}$`).test(id))fail(`${label} is invalid.`);return id;}
+function featureList(value,label){if(!Array.isArray(value)||value.length>MAX_RECORDS)fail(`${label} must be a bounded list.`);return value;}
+function uniqueRecords(list,label){const seen=new Set();for(const item of list){if(seen.has(item.id))fail(`${label} contains duplicate identifiers.`);seen.add(item.id);}return list;}
+function checkFastLines(value,w,defaults=w.features?.fastLines||seedFeatures(w.products).fastLines){
+  featureObject(value,'Fast line configuration',['coverDays','roundTo','ids','modes','targets']);const result={...defaults};
+  if(value.coverDays!==undefined){if(![4,8].includes(value.coverDays))fail('Fast-line cover must be 4 or 8 days.');result.coverDays=value.coverDays;}
+  if(value.roundTo!==undefined){if(![1,5].includes(value.roundTo))fail('Fast-line rounding must be 1 or 5.');result.roundTo=value.roundTo;}
+  if(value.ids!==undefined){if(!Array.isArray(value.ids)||value.ids.length>w.products.length||new Set(value.ids).size!==value.ids.length)fail('Choose a unique list of fast-line products.');result.ids=value.ids.map(id=>product(w,id).id);}
+  if(value.modes!==undefined){featureObject(value.modes,'Fast line modes');if(Object.keys(value.modes).length>w.products.length)fail('Too many fast-line modes.');result.modes=Object.fromEntries(Object.entries(value.modes).map(([id,mode])=>{product(w,id);if(!['auto','manual'].includes(mode))fail('Fast-line mode must be auto or manual.');return [id,mode];}));}
+  if(value.targets!==undefined){featureObject(value.targets,'Fast line targets');if(Object.keys(value.targets).length>w.products.length)fail('Too many fast-line targets.');result.targets=Object.fromEntries(Object.entries(value.targets).map(([id,target])=>[product(w,id).id,integer(target,0,999,'Fast-line target')]));}
+  return result;
+}
+function checkVans(value,label='Delivery vans'){
+  if(!Array.isArray(value)||value.length>20)fail(`${label} must have at most 20 vans.`);const seen=new Set();
+  return value.map(van=>{featureObject(van,'Delivery van',['id','days','cutoff','arrival','offset']);const id=string(van.id,60,'Van ID');if(!/^[\w-]+$/.test(id)||seen.has(id))fail('Van IDs must be unique letters, numbers or hyphens.');seen.add(id);if(!Array.isArray(van.days)||van.days.length>7||new Set(van.days).size!==van.days.length)fail('Van days must be unique weekdays.');const days=van.days.map(day=>integer(day,1,7,'Weekday'));for(const key of ['cutoff','arrival'])if(typeof van[key]!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(van[key]))fail('Van times must be HH:MM.');return {id,days,cutoff:van.cutoff,arrival:van.arrival,offset:integer(van.offset,0,3,'Arrival day offset')};});
+}
+function checkGoodsSettings(value,defaults={defaultSupplier:'Phoenix',showResolved:false,requireInvoice:false}){featureObject(value,'Goods In settings',['defaultSupplier','showResolved','requireInvoice']);const out={...defaults};for(const [key,val] of Object.entries(value)){if(key==='defaultSupplier'&&!suppliers.includes(val))fail('Choose a known test supplier.');if(key!=='defaultSupplier'&&typeof val!=='boolean')fail(`${key} must be true or false.`);out[key]=val;}return out;}
+function restoreFeatures(value,w){
+  const defaults=seedFeatures(w.products);if(value==null)return defaults;
+  featureObject(value,'Workspace features',Object.keys(defaults));const f={...defaults};
+  if(value.fastLines!==undefined)f.fastLines=checkFastLines(value.fastLines,w,defaults.fastLines);
+  if(value.deliveryVans!==undefined){featureObject(value.deliveryVans,'Delivery schedules',suppliers);f.deliveryVans=Object.fromEntries(Object.entries(value.deliveryVans).map(([supplier,vans])=>[supplier,checkVans(vans)]));}
+  if(value.review!==undefined){const r=featureObject(value.review,'Weekly review',['entries','notes','submittedAt']);f.review={entries:uniqueRecords(featureList(r.entries??[],'Review entries').map(entry=>{featureObject(entry,'Review entry',['id','productId','type','quantity','notes','createdAt']);if(!['stockout','overstock'].includes(entry.type))fail('Review type must be stockout or overstock.');return {id:featureId(entry.id,'REVIEW','Review ID'),productId:product(w,entry.productId).id,type:entry.type,quantity:integer(entry.quantity,1,9999,'Review quantity'),notes:optionalText(entry.notes),createdAt:featureDate(entry.createdAt)};}),'Review entries'),notes:optionalText(r.notes,2000,'Weekly notes'),submittedAt:r.submittedAt==null?null:featureDate(r.submittedAt)};}
+  if(value.waste!==undefined)f.waste=uniqueRecords(featureList(value.waste,'Waste records').map(entry=>{featureObject(entry,'Waste record',['id','productId','quantity','reason','unitPrice','total','createdAt']);const p=product(w,entry.productId),quantity=integer(entry.quantity,1,9999,'Waste quantity');return {id:featureId(entry.id,'WASTE','Waste ID'),productId:p.id,quantity,reason:string(entry.reason,500,'Waste reason'),unitPrice:p.price,total:money(p.price*quantity),createdAt:featureDate(entry.createdAt)};}),'Waste records');
+  if(value.slowMovers!==undefined){const slow=featureObject(value.slowMovers,'Slow-mover evaluation',['evaluatedAt','productIds']);if(!Array.isArray(slow.productIds)||slow.productIds.length>w.products.length||new Set(slow.productIds).size!==slow.productIds.length)fail('Invalid evaluated product list.');f.slowMovers={evaluatedAt:slow.evaluatedAt==null?null:featureDate(slow.evaluatedAt),productIds:slow.productIds.map(id=>product(w,id).id)};}
+  if(value.goodsSettings!==undefined)f.goodsSettings=checkGoodsSettings(value.goodsSettings,defaults.goodsSettings);
+  if(value.support!==undefined)f.support=uniqueRecords(featureList(value.support,'Support notes').map(entry=>{featureObject(entry,'Support note',['id','message','createdAt']);return {id:featureId(entry.id,'SUPPORT','Support ID'),message:string(entry.message,2000,'Support message'),createdAt:featureDate(entry.createdAt)};}),'Support notes');
+  if(value.surplus!==undefined){const surplus=featureObject(value.surplus,'Surplus workspace',['offers','transfers']);const offers=uniqueRecords(featureList(surplus.offers??[],'Surplus offers').map(entry=>{featureObject(entry,'Surplus offer',['id','productId','quantity','available','unitPrice','status','createdAt','expiresAt']);const p=product(w,entry.productId),quantity=integer(entry.quantity,1,9999,'Offer quantity');if(!['active','closed'].includes(entry.status))fail('Invalid offer status.');return {id:featureId(entry.id,'OFFER','Offer ID'),productId:p.id,quantity,available:integer(entry.available,0,quantity,'Available offer quantity'),unitPrice:money(p.price*.5),status:entry.status,createdAt:featureDate(entry.createdAt),expiresAt:featureDate(entry.expiresAt)};}),'Surplus offers');const transfers=uniqueRecords(featureList(surplus.transfers??[],'Surplus transfers').map(entry=>{featureObject(entry,'Surplus transfer',['id','offerId','productId','quantity','unitPrice','total','branch','status','createdAt','dispatchedAt','confirmedAt']);const offer=offers.find(o=>o.id===entry.offerId);if(!offer||offer.productId!==entry.productId)fail('Surplus transfer must match an existing offer.');if(!['Requested','Dispatched','Confirmed'].includes(entry.status))fail('Invalid surplus transfer status.');const quantity=integer(entry.quantity,1,offer.quantity,'Transfer quantity');return {id:featureId(entry.id,'TRANSFER','Transfer ID'),offerId:offer.id,productId:offer.productId,quantity,unitPrice:offer.unitPrice,total:money(offer.unitPrice*quantity),branch:string(entry.branch,80,'Test branch'),status:entry.status,createdAt:featureDate(entry.createdAt),...(entry.dispatchedAt?{dispatchedAt:featureDate(entry.dispatchedAt)}:{}),...(entry.confirmedAt?{confirmedAt:featureDate(entry.confirmedAt)}:{})};}),'Surplus transfers');f.surplus={offers,transfers};}
+  return f;
+}
+function cascadePreview(w,priority=suppliers){
+  if(!Array.isArray(priority)||!priority.length||priority.length>suppliers.length||new Set(priority).size!==priority.length||priority.some(s=>!suppliers.includes(s)))fail('Supplier priority must contain unique known test suppliers.');
+  const lines=w.basket.map(item=>{const hash=[...item.id].reduce((n,c)=>n+c.charCodeAt(0),0),factors=[1,1.04,.98,1.08,1.02];const quotes=priority.map((supplier,index)=>({supplier,unitPrice:money(item.price*factors[(suppliers.indexOf(supplier)+hash)%factors.length]),available:true,stock:999,simulated:true}));const chosen=[...quotes].sort((a,b)=>a.unitPrice-b.unitPrice||priority.indexOf(a.supplier)-priority.indexOf(b.supplier))[0];return {productId:item.id,name:item.name,quantity:item.quantity,quotes,selectedSupplier:chosen.supplier,unitPrice:chosen.unitPrice,lineTotal:money(chosen.unitPrice*item.quantity)};});
+  const groups=priority.map(supplier=>{const items=lines.filter(line=>line.selectedSupplier===supplier);return {supplier,items,total:money(items.reduce((sum,line)=>sum+line.lineTotal,0))};}).filter(group=>group.items.length);
+  const previewTotal=money(groups.reduce((sum,group)=>sum+group.total,0)),referenceTotal=total(w.basket);return {simulated:true,lines,groups,total:previewTotal,referenceTotal,saving:money(referenceTotal-previewTotal),message:'Sample supplier quotes only. No supplier is contacted and the basket is unchanged.'};
+}
+
 function catalogueIdentity(id,type) {
   const valid=typeof id==='string'&&(type==='TARIFF'?/^[a-f0-9]{32}$/.test(id):['AMPP','VMPP'].includes(type)&&/^[1-9][0-9]{5,17}$/.test(id));
   if(!valid)fail('Choose a valid medicine pack from the reference search.');
@@ -164,14 +207,14 @@ async function restoreWorkspace(input) {
     const lines=items(o.items);if(!lines.length)fail('Snapshot orders need items.');
     const status=lines.every(i=>i.received===i.quantity)?'Received':lines.some(i=>i.received>0)?'Part received':'Awaiting';
     if(!validDate(o.createdAt))fail('Invalid snapshot order date.');
-    return {id:o.id,items:lines,total:total(lines),status,supplier:suppliers.includes(o.supplier)?o.supplier:'Phoenix',createdAt:o.createdAt,source:o.source==='auto'?'auto':'manual',notes:typeof o.notes==='string'?o.notes.slice(0,500):'',...(validDate(o.receivedAt)?{receivedAt:o.receivedAt}:{})};
+    return {id:o.id,items:lines,total:total(lines),status,supplier:suppliers.includes(o.supplier)?o.supplier:'Phoenix',createdAt:o.createdAt,source:o.source==='auto'?'auto':'manual',notes:typeof o.notes==='string'?o.notes.slice(0,500):'',...(validDate(o.receivedAt)?{receivedAt:o.receivedAt}:{}),...(o.invoice?{invoice:optionalText(o.invoice,80,'Invoice reference')}:{})};
   });
   const draftIds=new Set();w.drafts=records('drafts').map(d=>{if(!d||!/^DRAFT-\d{4,9}$/.test(d.id)||draftIds.has(d.id)||!validDate(d.createdAt))fail('Invalid snapshot draft.');draftIds.add(d.id);return {id:d.id,name:string(d.name,80,'Draft name'),items:items(d.items),createdAt:d.createdAt};});
-  const claimIds=new Set();w.claims=records('claims').map(c=>{if(!c||!/^CLAIM-\d{4,9}$/.test(c.id)||claimIds.has(c.id)||!orderIds.has(c.orderId)||!validDate(c.createdAt))fail('Invalid snapshot claim.');claimIds.add(c.id);return {id:c.id,orderId:c.orderId,reason:string(c.reason,500,'Claim reason'),quantity:integer(c.quantity),status:['Open','Resolved'].includes(c.status)?c.status:'Open',createdAt:c.createdAt};});
+  const claimIds=new Set();w.claims=records('claims').map(c=>{if(!c||!/^CLAIM-\d{4,9}$/.test(c.id)||claimIds.has(c.id)||!orderIds.has(c.orderId)||!validDate(c.createdAt))fail('Invalid snapshot claim.');claimIds.add(c.id);return {id:c.id,orderId:c.orderId,reason:string(c.reason,500,'Claim reason'),quantity:integer(c.quantity),status:['Open','Resolved','draft','submitted','acknowledged','resolved','disputed'].includes(c.status)?c.status:'Open',credit:typeof c.credit==='number'&&Number.isFinite(c.credit)&&c.credit>=0&&c.credit<=1000000?money(c.credit):0,createdAt:c.createdAt};});
   w.feedback=records('feedback').map(f=>({id:string(f.id,40,'Feedback ID'),productId:product(w,f.productId).id,message:string(f.message,500,'Feedback'),createdAt:validDate(f.createdAt)?f.createdAt:iso()}));
   const stockCounts=input.stockCounts??[];if(!Array.isArray(stockCounts)||stockCounts.length>MAX_RECORDS)fail('Invalid snapshot stock counts.');
   w.stockCounts=stockCounts.map(c=>{if(!c||!validDate(c.createdAt))fail('Invalid stock count.');return {productId:product(w,c.productId).id,quantity:integer(c.quantity,0,9999,'Stock'),previous:integer(c.previous,0,9999,'Previous stock'),createdAt:c.createdAt};});
-  w.settings=checkSettings(input.settings,w.settings,w.products);return w;
+  w.settings=checkSettings(input.settings,w.settings,w.products);w.features=restoreFeatures(input.features,w);if(input.features?.fastLines){for(const p of w.products)p.fast=w.features.fastLines.ids.includes(p.id);w.settings.fastTargets={...w.settings.fastTargets,...w.features.fastLines.targets};}return w;
 }
 function reply(data,status=200,w){return Response.json({data,...(w?{workspace:copy(w)}:{}),production:false},{status,headers:{'cache-control':'no-store','x-stockiq-sandbox':'true','x-production':'false'}});}
 async function body(request){
@@ -197,7 +240,7 @@ export async function handleApi(request,env={}) {
       const envelope=await body(request),id=string(envelope.id,80,'Workspace ID');
       if(!/^[\w-]{8,80}$/.test(id))fail('Workspace ID must contain 8–80 letters, numbers, underscores or hyphens.');
       const logicalMethod=typeof envelope.method==='string'?envelope.method.toUpperCase():'';
-      if(!['GET','POST','PATCH','DELETE'].includes(logicalMethod))fail('Dispatch method must be GET, POST, PATCH or DELETE.');
+      if(!['GET','POST','PATCH','PUT','DELETE'].includes(logicalMethod))fail('Dispatch method must be GET, POST, PATCH, PUT or DELETE.');
       if(typeof envelope.path!=='string'||envelope.path.length>2048||!envelope.path.startsWith('/api/')||envelope.path.includes('\\'))fail('Dispatch path must be a same-origin /api/ path.');
       const logicalURL=new URL(envelope.path,url.origin),logicalPath=logicalURL.pathname.replace(/\/$/,'');
       if(logicalURL.origin!==url.origin||!logicalURL.pathname.startsWith('/api/')||['/api/dispatch','/api/workspaces'].includes(logicalPath))fail('This route cannot be called through dispatch.');
@@ -217,6 +260,51 @@ export async function handleApi(request,env={}) {
     }
     const id=request.headers.get('x-workspace-id');const w=id&&sessions.get(id);
     if(!w)fail('Test workspace is not initialized. Restore or create it with POST /api/workspaces.',409,'SESSION_EXPIRED');
+    if(path==='/api/fast-lines'&&method==='GET')return reply(w.features.fastLines,200,w);
+    if(path==='/api/fast-lines'&&method==='PATCH'){
+      const data=await body(request),previous=w.features.fastLines,next=checkFastLines(data,w);
+      for(const id of next.ids){if((next.modes[id]||'auto')==='auto'){const p=product(w,id);next.targets[id]=Math.min(999,Math.ceil((p.target/7*next.coverDays)/next.roundTo)*next.roundTo);}else if(next.targets[id]===undefined)next.targets[id]=w.settings.fastTargets[id]??product(w,id).target;}
+      next.modes=Object.fromEntries(next.ids.map(id=>[id,next.modes[id]||'auto']));next.targets=Object.fromEntries(next.ids.map(id=>[id,next.targets[id]]));
+      w.features.fastLines=next;for(const p of w.products)p.fast=next.ids.includes(p.id);
+      w.settings.fastTargets={...Object.fromEntries(Object.entries(w.settings.fastTargets).filter(([id])=>!previous.ids.includes(id))),...next.targets};return reply(next,200,w);
+    }
+    if(path==='/api/delivery-vans'&&method==='GET')return reply(w.features.deliveryVans,200,w);
+    const vansMatch=path.match(/^\/api\/delivery-vans\/([^/]+)$/);
+    if(vansMatch&&['PUT','PATCH'].includes(method)){const supplier=decodeURIComponent(vansMatch[1]);if(!suppliers.includes(supplier))fail('Choose a known test supplier.');const data=await body(request);featureObject(data,'Delivery schedule',['vans']);const vans=checkVans(data.vans);w.features.deliveryVans[supplier]=vans;return reply({supplier,vans},200,w);}
+    if(path==='/api/reviews'&&method==='GET')return reply(w.features.review,200,w);
+    if(path==='/api/reviews/entries'&&method==='POST'){
+      const data=await body(request);featureObject(data,'Review entry',['productId','type','quantity','notes']);const p=product(w,data.productId);if(!['stockout','overstock'].includes(data.type))fail('Review type must be stockout or overstock.');const quantity=integer(data.quantity??1,1,9999,'Review quantity'),notes=optionalText(data.notes);capacity(w.features.review.entries,'Review entry');const entry={id:nextId(w.features.review.entries,'REVIEW'),productId:p.id,type:data.type,quantity,notes,createdAt:iso()};w.features.review.entries.push(entry);w.features.review.submittedAt=null;return reply(entry,201,w);
+    }
+    const reviewMatch=path.match(/^\/api\/reviews\/entries\/([^/]+)$/);
+    if(reviewMatch&&method==='DELETE'){if(!w.features.review.entries.some(entry=>entry.id===reviewMatch[1]))fail('Review entry not found.',404);w.features.review.entries=w.features.review.entries.filter(entry=>entry.id!==reviewMatch[1]);w.features.review.submittedAt=null;return reply({deleted:true},200,w);}
+    if(path==='/api/reviews/submit'&&method==='POST'){const data=await body(request);featureObject(data,'Weekly review submission',['notes']);const notes=optionalText(data.notes,2000,'Weekly notes');if(!w.features.review.entries.length&&!notes)fail('Add a stockout, overstock or weekly note before submitting.');w.features.review.notes=notes;w.features.review.submittedAt=iso();return reply({...w.features.review,simulated:true,message:'Weekly review saved in this test workspace.'},200,w);}
+    if(path==='/api/waste'&&method==='GET')return reply(w.features.waste,200,w);
+    if(path==='/api/waste'&&method==='POST'){const data=await body(request);featureObject(data,'Waste record',['productId','quantity','reason']);const p=product(w,data.productId),quantity=integer(data.quantity,1,9999,'Waste quantity'),reason=string(data.reason,500,'Waste reason');if(quantity>p.stock)fail('Waste quantity exceeds the sample shelf stock.');capacity(w.features.waste,'Waste record');const entry={id:nextId(w.features.waste,'WASTE'),productId:p.id,quantity,reason,unitPrice:p.price,total:money(quantity*p.price),createdAt:iso()};p.stock-=quantity;w.features.waste.unshift(entry);return reply(entry,201,w);}
+    if(path==='/api/slow-movers/evaluate'&&method==='POST'){const ids=w.products.filter(p=>!p.fast&&p.stock>(w.settings.fastTargets[p.id]??p.target)).map(p=>p.id);w.features.slowMovers={evaluatedAt:iso(),productIds:ids};return reply({...w.features.slowMovers,products:w.products.filter(p=>ids.includes(p.id)),simulated:true,rule:'Non-fast products with sample stock above target.'},200,w);}
+    if(path==='/api/goods-settings'&&method==='GET')return reply(w.features.goodsSettings,200,w);
+    if(path==='/api/goods-settings'&&method==='PATCH'){const data=await body(request),next=checkGoodsSettings(data,w.features.goodsSettings);w.features.goodsSettings=next;return reply(next,200,w);}
+    if(path==='/api/support'&&method==='POST'){const data=await body(request);featureObject(data,'Support note',['message']);const message=string(data.message,2000,'Support message');capacity(w.features.support,'Support note');const note={id:nextId(w.features.support,'SUPPORT'),message,createdAt:iso()};w.features.support.push(note);return reply({note,message:'Saved in this workspace',simulated:true},201,w);}
+    if(path==='/api/basket/cascade'&&method==='POST'){const data=await body(request);featureObject(data,'Cascade preview',['supplierPriority']);return reply(cascadePreview(w,data.supplierPriority??suppliers),200,w);}
+    if(path==='/api/orders/cascade'&&method==='POST'){
+      const data=await body(request);featureObject(data,'Cascade submission',['allocations','notes']);if(!w.basket.length)fail('Add products to your test basket before placing an order.');if(!Array.isArray(data.allocations)||data.allocations.length!==w.basket.length)fail('Allocate every basket line exactly once.');const notes=optionalText(data.notes,500,'Order notes'),seen=new Set(),groups=new Map();
+      for(const allocation of data.allocations){featureObject(allocation,'Supplier allocation',['productId','supplier']);const item=w.basket.find(item=>item.id===allocation.productId);if(!item||seen.has(item.id))fail('Allocate every basket line exactly once.');if(!suppliers.includes(allocation.supplier))fail('Choose a known test supplier.');seen.add(item.id);if(!groups.has(allocation.supplier))groups.set(allocation.supplier,[]);groups.get(allocation.supplier).push({...copy(item),received:0});}
+      if(w.orders.length+groups.size>MAX_RECORDS)fail('Order limit reached. Reset this test workspace to continue.',409);let counter=Math.max(1000,...w.orders.map(o=>Number(o.id.split('-').pop())||1000));const created=[...groups].map(([supplier,items])=>({id:`TEST-${++counter}`,supplier,items,total:total(items),status:'Awaiting',createdAt:iso(),source:'manual',notes}));w.orders.unshift(...created);w.basket=[];return reply({orders:created,total:money(created.reduce((sum,o)=>sum+o.total,0)),simulated:true,message:'Test orders use the canonical sample unit costs; comparison quotes are estimates only.'},201,w);
+    }
+    const claimStatusMatch=path.match(/^\/api\/claims\/([^/]+)$/);
+    if(claimStatusMatch&&method==='PATCH'){const c=w.claims.find(c=>c.id===claimStatusMatch[1]);if(!c)fail('Claim not found.',404);const data=await body(request);featureObject(data,'Claim update',['status','credit']);if(data.status!==undefined&&!['draft','submitted','acknowledged','resolved','disputed'].includes(data.status))fail('Choose a valid claim status.');if(data.credit!==undefined&&(typeof data.credit!=='number'||!Number.isFinite(data.credit)||data.credit<0||data.credit>1000000))fail('Claim credit must be a valid nonnegative amount.');if(data.status!==undefined)c.status=data.status;if(data.credit!==undefined)c.credit=money(data.credit);return reply(c,200,w);}
+    if(path==='/api/surplus'&&method==='GET'){const state=w.features.surplus;return reply({...state,statement:{sentValue:money(state.transfers.filter(t=>t.status!=='Requested').reduce((sum,t)=>sum+t.total,0)),confirmedValue:money(state.transfers.filter(t=>t.status==='Confirmed').reduce((sum,t)=>sum+t.total,0)),pendingValue:money(state.transfers.filter(t=>t.status!=='Confirmed').reduce((sum,t)=>sum+t.total,0))},simulated:true},200,w);}
+    if(path==='/api/surplus/offers'&&method==='POST'){
+      const data=await body(request);featureObject(data,'Surplus offer',['productId','quantity']);const p=product(w,data.productId),quantity=integer(data.quantity,1,999,'Offer quantity');if(quantity>p.stock)fail('Offer quantity exceeds the sample shelf stock.');const existing=w.features.surplus.offers.find(o=>o.productId===p.id&&o.status==='active');if(existing&&w.features.surplus.transfers.some(t=>t.offerId===existing.id&&t.status==='Requested'))fail('Dispatch or cancel pending transfers before replacing this offer.',409);capacity(w.features.surplus.offers,'Surplus offer');const offer={id:nextId(w.features.surplus.offers,'OFFER'),productId:p.id,quantity,available:quantity,unitPrice:money(p.price*.5),status:'active',createdAt:iso(),expiresAt:new Date(Date.now()+90*86400000).toISOString()};if(existing)existing.status='closed';w.features.surplus.offers.unshift(offer);w.settings.surplusOffers=w.features.surplus.offers.filter(o=>o.status==='active'&&o.available>0).map(o=>({productId:o.productId,quantity:o.available,createdAt:o.createdAt}));return reply(offer,201,w);
+    }
+    const offerMatch=path.match(/^\/api\/surplus\/offers\/([^/]+)$/);
+    if(offerMatch&&method==='DELETE'){const offer=w.features.surplus.offers.find(o=>o.id===offerMatch[1]);if(!offer)fail('Surplus offer not found.',404);if(w.features.surplus.transfers.some(t=>t.offerId===offer.id&&t.status==='Requested'))fail('Dispatch or cancel pending transfers before closing this offer.',409);offer.status='closed';offer.available=0;w.settings.surplusOffers=w.features.surplus.offers.filter(o=>o.status==='active'&&o.available>0).map(o=>({productId:o.productId,quantity:o.available,createdAt:o.createdAt}));return reply({closed:true,offer},200,w);}
+    if(path==='/api/surplus/transfers'&&method==='POST'){
+      const data=await body(request);featureObject(data,'Surplus transfer',['offerId','quantity','branch']);const offer=w.features.surplus.offers.find(o=>o.id===data.offerId);if(!offer||offer.status!=='active'||Date.parse(offer.expiresAt)<=Date.now())fail('Choose a current active surplus offer.');const quantity=integer(data.quantity,1,999,'Transfer quantity'),branch=string(data.branch||'Demo branch',80,'Test branch');if(quantity>offer.available)fail('Transfer quantity exceeds the unreserved offer quantity.');capacity(w.features.surplus.transfers,'Surplus transfer');const transfer={id:nextId(w.features.surplus.transfers,'TRANSFER'),offerId:offer.id,productId:offer.productId,quantity,unitPrice:offer.unitPrice,total:money(offer.unitPrice*quantity),branch,status:'Requested',createdAt:iso()};offer.available-=quantity;w.features.surplus.transfers.unshift(transfer);w.settings.surplusOffers=w.features.surplus.offers.filter(o=>o.status==='active'&&o.available>0).map(o=>({productId:o.productId,quantity:o.available,createdAt:o.createdAt}));return reply({...transfer,simulated:true},201,w);
+    }
+    const transferMatch=path.match(/^\/api\/surplus\/transfers\/([^/]+)\/(dispatch|confirm)$/);
+    if(transferMatch&&method==='POST'){
+      const transfer=w.features.surplus.transfers.find(t=>t.id===transferMatch[1]);if(!transfer)fail('Surplus transfer not found.',404);if(transferMatch[2]==='dispatch'){if(transfer.status!=='Requested')fail('Only a requested test transfer can be dispatched.',409);const p=product(w,transfer.productId);if(p.stock<transfer.quantity)fail('The sample shelf stock is too low for this transfer.');p.stock-=transfer.quantity;transfer.status='Dispatched';transfer.dispatchedAt=iso();}else{if(transfer.status!=='Dispatched')fail('Only a dispatched test transfer can be confirmed.',409);transfer.status='Confirmed';transfer.confirmedAt=iso();}return reply({...transfer,simulated:true},200,w);
+    }
     if(path==='/api/catalogue/status'&&method==='GET')return reply(dmdCatalogueStatus(),200,w);
     if(path==='/api/dmd/search'&&method==='GET'){
       const query=(url.searchParams.get('q')||'').trim();if(query.length>200)fail('Search must be at most 200 characters.');
@@ -267,7 +355,7 @@ export async function handleApi(request,env={}) {
     const receiveMatch=path.match(/^\/api\/orders\/([^/]+)\/receive$/);
     if(receiveMatch&&method==='POST'){
       const o=order(w,receiveMatch[1]);if(o.status==='Received')fail('This test order has already been received.',409);
-      const data=await body(request);const lines=data.items===undefined?o.items.filter(i=>i.received<i.quantity).map(i=>({productId:i.id,quantity:i.quantity-i.received})):data.items;
+      const data=await body(request);const invoice=optionalText(data.invoice??data.reference,80,'Invoice reference');if(w.features.goodsSettings.requireInvoice&&!invoice&&!o.invoice)fail('Enter an invoice or delivery-note reference before receiving this test delivery.');const lines=data.items===undefined?o.items.filter(i=>i.received<i.quantity).map(i=>({productId:i.id,quantity:i.quantity-i.received})):data.items;
       if(!Array.isArray(lines)||!lines.length||lines.length>o.items.length)fail('Provide at least one receipt item.');
       const seen=new Set();const validated=lines.map(l=>{
         if(!l||seen.has(l.productId))fail('Receipt items must be unique.');seen.add(l.productId);
@@ -275,7 +363,7 @@ export async function handleApi(request,env={}) {
         integer(l.quantity,1,item.quantity-item.received,'Received quantity');const p=product(w,item.id);integer(p.stock+l.quantity,0,9999,'Stock');return {item,p,quantity:l.quantity};
       });
       for(const {item,p,quantity} of validated){item.received+=quantity;p.stock+=quantity;p.owed=Math.max(0,p.owed-quantity);}
-      o.status=o.items.every(i=>i.received===i.quantity)?'Received':'Part received';if(o.status==='Received')o.receivedAt=iso();return reply(o,200,w);
+      o.status=o.items.every(i=>i.received===i.quantity)?'Received':'Part received';o.receivedAt=iso();if(invoice)o.invoice=invoice;return reply(o,200,w);
     }
     const claimMatch=path.match(/^\/api\/orders\/([^/]+)\/claim$/);
     if(claimMatch&&method==='POST'){

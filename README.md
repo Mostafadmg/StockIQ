@@ -1,12 +1,12 @@
 # StockIQ test workspace
 
-A working draft of the StockIQ branch ordering interface with the NHS dm+d catalogue and isolated test orders. It reproduces the main tabs and Advanced/Tools navigation using a verified reference release and simulated pharmacy stock.
+A reconstruction of the StockIQ branch app from read-only inspection of the website, with its compact layout, navigation, screens and local test workflows. It includes the verified NHS dm+d catalogue and an isolated order/stock API. The original server implementation was not supplied; supplier integrations and forecasting rules are reconstructed test behavior, not a copy of that backend.
 
 **This is a sandbox, not a production ordering system.** No order goes to a supplier, no original branch stock is changed and no production login details are included. All order IDs start with `TEST-`.
 
 ## Run locally
 
-Requires Node.js 22 or newer. No packages need installing; the catalogue is included in the source download.
+Requires Node.js 22 or newer. No packages need installing; the catalogue is included in the repository and source download. GitHub Actions runs syntax, build and automated checks on pushes and pull requests.
 
 ```sh
 npm run build
@@ -21,13 +21,24 @@ Open `http://localhost:3000`. Deep links including `/daily-orders`, `/inventory`
 1. Open **Manual Orders** and type at least two characters, such as `amoxicillin 500` or a brand name.
 2. Choose a matching AMPP or VMPP pack from the dropdown. Actual NHS identifiers, pack sizes, manufacturers and available reference prices are shown.
 3. Enter the number of packs and **Add to test basket**.
-4. Submit a test order, receive all or part of it in **Goods In**, and check stock/history.
+4. Open **Review & Cascade**, compare simulated supplier allocations and submit one or more test orders. Receive all or part in **Goods In**, and check stock/history.
 
 Medicine and pack data are real reference records. Supplier costs and stock are simulated: newly imported packs use an explicitly labelled £1 test cost and start at zero shelf stock. Tariff/list reference prices are shown separately and are not wholesale quotations. Quantities entered for orders/receipts are whole packs; the dm+d quantity/unit describes the contents of one pack.
 
 **Sample products** is a separate, explicitly selected source. No failed real-data search silently substitutes synthetic matches.
 
-The interface also includes Auto Orders, Branch Usage, Fast Lines targets, Delivery Times, Stock Count, Smart Orders, Surplus, Needs Attention, local reference-image/CSV import, Stock Feedback, Saved Drafts, Order Analytics and an API Test Console.
+The original main tabs and menus are reproduced:
+
+- Auto Orders: pending/fast/OTC lines, shelf counts, selections and basket actions.
+- Manual Orders: searchable dm+d packs, reference sidebar and fixed Continue summary.
+- Goods In: supplier cards, receipt queue and invoice references, Claims, Analytics and Settings.
+- History: grouped order/line timeline, status/supplier/date filters, reorder and spend summary.
+- Advanced: Branch Usage, Fast Lines, Delivery Times, Stock Count, Smart Orders, Analytics and Surplus.
+- Tools: Needs Attention, Screenshot Import, Stock Feedback, Saved Drafts and Order Analytics.
+
+Fast Lines supports cover, rounding and manual/auto targets. Delivery Times supports multiple vans, running days and arrival offsets. Weekly feedback separates stockouts/overstocks. Waste adjusts test stock; claims have workflow statuses and credits; surplus supports offer → request → dispatch → confirm → statement. The account menu contains source download, workspace settings, a demo sign-in screen and the developer API console.
+
+See `docs/parity.md` for feature coverage and `docs/development.md` for the code layout.
 
 ## NHS reference data
 
@@ -75,14 +86,13 @@ curl -X POST http://localhost:3000/api/catalogue/import \
 
 ## GitHub handoff
 
-Intended repository: `https://github.com/Mostafadmg/StockIQ`. Nothing has been pushed to that GitHub repository. The hosted draft's **Download source** link provides a complete ZIP, including the catalogue.
+Repository: `https://github.com/Mostafadmg/StockIQ`. The hosted draft's **Download source** link also provides a complete ZIP, including the catalogue.
 
 ```sh
-git init -b main
-git add .
-git commit -m "Add StockIQ isolated ordering draft"
-git remote add origin https://github.com/Mostafadmg/StockIQ.git
-git push -u origin main
+git clone https://github.com/Mostafadmg/StockIQ.git
+cd StockIQ
+npm run build
+npm start
 ```
 
 Production supplier ordering, transactional stock, PMR, role-based access, automated OCR and trained forecasting remain future integrations. The demo does not imply those connections exist.
