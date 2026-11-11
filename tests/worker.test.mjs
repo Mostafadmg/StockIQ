@@ -52,3 +52,6 @@ test('compiled client assets and server contain no production domains, account e
   assert.match(manifest.project_id,/^appgprj_/);assert.equal(manifest.static,undefined);
 });
 
+
+
+test('downloadable source is a ZIP of authored code without runtime state',async()=>{const response=await worker.fetch(new Request('https://sandbox.test/source.zip'),{},{});assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'application/zip');const bytes=new Uint8Array(await response.arrayBuffer());assert.equal(String.fromCharCode(...bytes.slice(0,2)),'PK');const text=new TextDecoder().decode(bytes);assert.ok(text.includes('stockiq/src/app.js'));assert.ok(text.includes('stockiq/README.md'));const names=[];let offset=0;const buffer=Buffer.from(bytes);while(buffer.readUInt32LE(offset)===0x04034b50){const size=buffer.readUInt32LE(offset+18),length=buffer.readUInt16LE(offset+26),extra=buffer.readUInt16LE(offset+28);names.push(buffer.subarray(offset+30,offset+30+length).toString());offset+=30+length+extra+size;}assert.ok(names.length>=17);assert.ok(names.every(name=>name.startsWith('stockiq/')));assert.ok(!names.some(name=>/browser-profile|localStorage|\.env|\.git\//.test(name)));});
