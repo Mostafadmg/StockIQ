@@ -23,15 +23,14 @@ test('deep links serve the same shell; missing assets remain 404 and HEAD omits 
 });
 test('hosted page policy permits same-origin APIs and excludes external connections',async()=>{
   const r=await fetchDraft('/');const policy=r.headers.get('content-security-policy');
-  assert.equal(r.headers.get('permissions-policy'),'serial=(self)');
+  assert.equal(r.headers.get('permissions-policy'),'serial=()');
   assert.ok(policy);assert.match(policy,/(?:^|;)\s*connect-src 'self'(?:;|$)/);assert.match(policy,/(?:^|;)\s*script-src 'self'(?:;|$)/);
   assert.match(policy,/object-src 'none'/);assert.match(policy,/base-uri 'self'/);assert.match(policy,/form-action 'self'/);
   assert.doesNotMatch(policy,/https?:|\*|'unsafe-eval'/);assert.equal(r.headers.get('x-content-type-options'),'nosniff');
 });
-test('the serial transport is served as a first-party module with no scanner output commands',async()=>{
-  const transport=await fetchDraft('/serial-scanner.js');assert.equal(transport.status,200);assert.match(transport.headers.get('content-type'),/javascript/);
-  const source=await transport.text();assert.match(source,/export function createSerialScanner/);assert.doesNotMatch(source,/getWriter\s*\(|setSignals\s*\(/);
-  const picker=await (await fetchDraft('/manual-search.js')).text();assert.match(picker,/from ['"]\.\/serial-scanner\.js['"]/);
+test('manual ordering no longer ships scanner controls or a serial transport',async()=>{
+  assert.equal((await fetchDraft('/serial-scanner.js')).status,404);
+  const picker=await (await fetchDraft('/manual-search.js')).text();assert.doesNotMatch(picker,/navigator\.serial|manual-scan|manual-serial|Ready to scan|Scan a pack/);
 });
 test('deployed API artifact supports create, submit, receive and restored snapshots without network calls',async()=>{
   const id=`worker-test-${crypto.randomUUID()}`;

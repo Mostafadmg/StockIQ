@@ -16,7 +16,7 @@ The page names below were observed through read-only inspection. They form the d
 | --- | --- | --- |
 | Main | Auto Orders | Sample suggestions, product filtering, selection, quantities, and adding lines to a test basket. |
 | Auto Orders | Orders, Fast Lines, OTC | Synthetic product groups; representative counts, statuses, and filters. |
-| Main | Manual Orders | Product name/PIP search and comparison of seeded supplier quotes. Sample price concessions. |
+| Main | Manual Orders | NHS medicine search, pack selection, direct basket addition, modal Send now and simulated supplier comparison. |
 | Main | Goods In | Test delivery queue and receipt flow linked to sandbox orders. |
 | Goods In | Deliveries, Claims | Synthetic deliveries and claim records. No supplier notification or credit processing. |
 | Goods In | Analytics, Settings under More | Nested navigation targets; representative local configuration and summaries. |

@@ -14,9 +14,4 @@
 .view-manual .manual-quick-basket{display:flex;align-items:flex-end;gap:8px;padding-top:8px}.manual-quick-basket>label{display:flex;flex-direction:column;gap:4px;flex:none;font-size:11px;color:var(--muted)}
 .view-manual .manual-quick-basket input{width:58px;min-width:58px;min-height:40px;padding:8px 5px;text-align:center;font-size:13px;border-radius:var(--radius-ui,9px)}
 .view-manual .manual-quick-basket .btn{min-height:40px;padding:9px 11px;font-size:12px;white-space:nowrap;border-radius:var(--radius-ui,9px)}
-.view-manual .concessions-sidebar .workspace-product-entry{border:1px solid var(--line);border-radius:var(--radius-ui,9px);background:var(--surface);min-width:0;margin:0 0 10px;overflow:hidden}
-.view-manual .concessions-sidebar .workspace-product-entry>.concession-card{margin:0;border:0;border-radius:0;background:transparent}
-.view-manual .concessions-sidebar .workspace-product-entry>.concession-card:hover{background:var(--purple-bg)}
-.view-manual .workspace-product-entry>.manual-quick-basket{border-top:1px solid var(--line);padding:10px 12px;justify-content:space-between;flex-wrap:wrap}
-.view-manual .workspace-product-entry>.manual-quick-basket .btn{flex:1 1 110px;min-width:0;white-space:normal}
-@media(max-width:640px){.dmd-result-row{grid-template-columns:minmax(0,1fr)}.dmd-result-actions{padding:0 10px 12px;justify-content:flex-end}.manual-main .dmd-result-actions .dmd-quick-quantity,.manual-main .dmd-result-actions .dmd-quick-add,.view-manual .manual-quick-basket input,.view-manual .manual-quick-basket .btn{min-height:44px}.dmd-result-actions .dmd-quick-pack-hint{padding-bottom:0}.view-manual .workspace-product-entry>.manual-quick-basket{padding:10px}}
+@media(max-width:640px){.dmd-result-row{grid-template-columns:minmax(0,1fr)}.dmd-result-actions{padding:0 10px 12px;justify-content:flex-end}.manual-main .dmd-result-actions .dmd-quick-quantity,.manual-main .dmd-result-actions .dmd-quick-add,.view-manual .manual-quick-basket input,.view-manual .manual-quick-basket .btn{min-height:44px}.dmd-result-actions .dmd-quick-pack-hint{padding-bottom:0}}
