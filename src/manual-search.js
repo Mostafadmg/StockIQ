@@ -372,26 +372,30 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
       activeIndex=event.key==='ArrowDown'?(activeIndex+1)%matches.length:(activeIndex<0?matches.length-1:(activeIndex-1+matches.length)%matches.length);updateActive();
     }else if(event.key==='Enter'&&!popover.hidden&&activeIndex>=0){event.preventDefault();event.stopPropagation();chooseResult(activeIndex);}
   });
-  // Touch/pen taps must activate on pointerup: cancelling touch pointerdown can
-  // suppress iOS's compatibility click. Keep the option visible while focus moves.
+  // Keep dropdown controls visible while touch focus moves. Buttons activate
+  // on release; quantity fields retain native focus/editing and never activate.
+  const quickAddResult=index=>{const quantity=list.querySelector(`[data-dmd-quantity="${index}"]`);void addProduct(matches[index],{quantity:quantity?.value||''}).catch(error=>{if(alive){setStatus(error?.message||'Could not add this pack.',true);quantity?.focus();}});};
   listen(list,'pointerdown',event=>{
-    const option=event.target.closest('[data-dmd-index]');if(!option)return;
-    if(!event.pointerType||event.pointerType==='mouse'){optionPointer=null;lastPointerInteraction=null;event.preventDefault();return;}
-    optionPointer={id:event.pointerId??0,option,index:Number(option.dataset.dmdIndex),sequence:searchSequence,x:event.clientX??0,y:event.clientY??0,moved:false};
+    const option=event.target.closest('[data-dmd-index],[data-dmd-add],[data-dmd-quantity]');if(!option)return;
+    const kind=option.hasAttribute('data-dmd-add')?'add':option.hasAttribute('data-dmd-quantity')?'quantity':'modal';
+    if(!event.pointerType||event.pointerType==='mouse'){optionPointer=null;lastPointerInteraction=null;if(kind!=='quantity')event.preventDefault();return;}
+    const index=Number(kind==='add'?option.dataset.dmdAdd:kind==='quantity'?option.dataset.dmdQuantity:option.dataset.dmdIndex);
+    optionPointer={id:event.pointerId??0,option,kind,index,sequence:searchSequence,x:event.clientX??0,y:event.clientY??0,moved:false};
   });
   listen(doc,'pointermove',event=>{if(!optionPointer||(event.pointerId??0)!==optionPointer.id)return;if(Math.hypot((event.clientX??0)-optionPointer.x,(event.clientY??0)-optionPointer.y)>10)optionPointer.moved=true;});
   listen(doc,'pointerup',event=>{
     if(!optionPointer||(event.pointerId??0)!==optionPointer.id)return;
     const gesture=optionPointer;optionPointer=null;
+    if(gesture.kind==='quantity')return;
     const moved=gesture.moved||Math.hypot((event.clientX??0)-gesture.x,(event.clientY??0)-gesture.y)>10;
     const inside=gesture.option===event.target||gesture.option.contains(event.target);
     lastPointerInteraction={option:gesture.option,until:Date.now()+700};
     if(!alive||moved||!inside||!root.contains(gesture.option)||gesture.sequence!==searchSequence||medicineModal||isAdding)return;
-    event.preventDefault();event.stopPropagation();chooseResult(gesture.index);
+    event.preventDefault();event.stopPropagation();if(gesture.kind==='add')quickAddResult(gesture.index);else chooseResult(gesture.index);
   });
-  listen(doc,'pointercancel',event=>{if(optionPointer&&(event.pointerId??0)===optionPointer.id){lastPointerInteraction={option:optionPointer.option,until:Date.now()+700};optionPointer=null;}});
+  listen(doc,'pointercancel',event=>{if(optionPointer&&(event.pointerId??0)===optionPointer.id){if(optionPointer.kind!=='quantity')lastPointerInteraction={option:optionPointer.option,until:Date.now()+700};optionPointer=null;}});
   listen(root,'click',event=>{
-    const quickAdd=event.target.closest('[data-dmd-add]');if(quickAdd&&root.contains(quickAdd)){event.preventDefault();event.stopPropagation();const index=Number(quickAdd.dataset.dmdAdd),quantity=list.querySelector(`[data-dmd-quantity="${index}"]`);void addProduct(matches[index],{quantity:quantity?.value||''}).catch(error=>{if(alive){setStatus(error?.message||'Could not add this pack.',true);quantity?.focus();}});return;}
+    const quickAdd=event.target.closest('[data-dmd-add]');if(quickAdd&&root.contains(quickAdd)){event.preventDefault();event.stopPropagation();if(medicineModal||isAdding||(lastPointerInteraction?.option===quickAdd&&lastPointerInteraction.until>Date.now()))return;quickAddResult(Number(quickAdd.dataset.dmdAdd));return;}
     const option=event.target.closest('[data-dmd-index]');if(option&&root.contains(option)){event.preventDefault();event.stopPropagation();if(medicineModal||isAdding||(lastPointerInteraction?.option===option&&lastPointerInteraction.until>Date.now()))return;chooseResult(Number(option.dataset.dmdIndex));return;}
     if(event.target.closest('[data-dmd-clear]')){event.preventDefault();event.stopPropagation();selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isLoadingPacks=false;input.value='';renderSelection();setStatus('Type at least 2 characters.');input.focus();}
   });

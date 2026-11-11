@@ -92,6 +92,33 @@ test('search results add the chosen pack quantity directly once while a request 
  try{const option=await results(c),quantity=c.document.querySelector('[data-dmd-quantity]'),add=c.document.querySelector('[data-dmd-add]');assert.equal(option.contains(add),false,'The basket button is a sibling of the medicine button');quantity.value='4';c.emit(add,'pointerdown',{pointerType:'touch',pointerId:8});c.emit(add,'click');c.emit(add,'click');assert.equal(added.length,1);assert.deepEqual(added[0],{id:pack.id,type:'AMPP',query:pack.name,quantity:4});assert.equal(add.disabled,true);assert.equal(c.document.querySelector('[role="dialog"]'),null);assert.equal(sends,0);finish({});await waitFor(()=>!add.disabled);assert.match(c.document.querySelector('.dmd-search-status').textContent,/4 packs.*added to your basket/);assert.equal(quantity.value,'4');c.emit(option,'click');assert.ok(c.document.querySelector('[role="dialog"]'),'The same medicine retains its click-to-open modal route');assert.equal(sends,0);}finally{c.cleanup();}
 });
 
+test('touch and pen quick-add taps survive input blur and suppress the following compatibility click',async()=>{
+ for(const pointerType of ['touch','pen']){const added=[];let sends=0;const c=setup({onAdd:async selection=>{added.push(selection);return {};},onSend:async()=>sends++});
+  try{await results(c);const quantity=c.document.querySelector('[data-dmd-quantity]'),add=c.document.querySelector('[data-dmd-add]');quantity.value='4';const properties={pointerType,pointerId:17,clientX:30,clientY:40};
+   const down=c.emit(add,'pointerdown',properties);assert.equal(down.defaultPrevented,false);c.setFocused(c.document.body);c.emit(c.input,'focusout');await Promise.resolve();assert.equal(c.document.querySelector('.dmd-popover').hidden,false,'Blur cannot hide a result during a quick-add tap');
+   c.emit(add,'pointerup',properties);await waitFor(()=>!add.disabled);assert.equal(added.length,1);assert.equal(added[0].quantity,4);c.emit(add,'click');assert.equal(added.length,1,'Compatibility click must not add twice after the request finishes');assert.equal(c.document.querySelector('[role="dialog"]'),null);assert.equal(sends,0);
+   c.emit(c.document.body,'pointerdown',{pointerType:'touch',pointerId:18});assert.equal(c.document.querySelector('.dmd-popover').hidden,true,'Outside interaction still closes the dropdown');
+  }finally{c.cleanup();}
+ }
+});
+
+test('scrolling, cancelled and stale quick-add gestures do not add a pack',async()=>{
+ for(const mode of ['scroll','cancel','stale']){const added=[];const c=setup({onAdd:async selection=>{added.push(selection);return {};}});
+  try{await results(c);const add=c.document.querySelector('[data-dmd-add]'),properties={pointerType:'touch',pointerId:21,clientX:30,clientY:40};c.emit(add,'pointerdown',properties);c.setFocused(c.document.body);c.emit(c.input,'focusout');await Promise.resolve();
+   if(mode==='scroll')c.emit(add,'pointermove',{...properties,clientY:80});
+   if(mode==='cancel')c.emit(add,'pointercancel',properties);
+   if(mode==='stale'){c.input.value='new medicine';c.emit(c.input,'input');}
+   c.emit(add,'pointerup',mode==='scroll'?{...properties,clientY:80}:properties);c.emit(add,'click');await Promise.resolve();assert.equal(added.length,0,mode);assert.equal(c.document.querySelector('[role="dialog"]'),null,mode);
+  }finally{c.cleanup();}
+ }
+});
+
+test('touching a quick quantity field keeps the dropdown open and native editing intact',async()=>{
+ let additions=0;const c=setup({onAdd:async()=>additions++});try{await results(c);const quantity=c.document.querySelector('[data-dmd-quantity]'),properties={pointerType:'touch',pointerId:25,clientX:30,clientY:40};const down=c.emit(quantity,'pointerdown',properties);assert.equal(down.defaultPrevented,false);c.setFocused(c.document.body);c.emit(c.input,'focusout');await Promise.resolve();assert.equal(c.document.querySelector('.dmd-popover').hidden,false);c.setFocused(quantity);const up=c.emit(quantity,'pointerup',properties);assert.equal(up.defaultPrevented,false);c.emit(quantity,'click');quantity.value='6';c.emit(quantity,'input');assert.equal(quantity.disabled,false);assert.equal(quantity.value,'6');assert.equal(c.document.querySelector('.dmd-popover').hidden,false);assert.equal(c.document.querySelector('[role="dialog"]'),null);assert.equal(additions,0);
+  const add=c.document.querySelector('[data-dmd-add]');c.emit(add,'pointerdown',{pointerType:'mouse',pointerId:26});c.emit(add,'click');await waitFor(()=>additions===1);assert.equal(c.document.querySelector('[role="dialog"]'),null);
+ }finally{c.cleanup();}
+});
+
 test('direct basket add rejects invalid quantities and a failed request can be retried',async()=>{
  let fail=true;const added=[];const c=setup({onAdd:async selection=>{added.push(selection);if(fail)throw new Error('Basket temporarily unavailable');return {};}});
  try{await results(c);const quantity=c.document.querySelector('[data-dmd-quantity]'),add=c.document.querySelector('[data-dmd-add]');for(const value of ['','0','1.5','1000']){quantity.value=value;c.emit(add,'click');await pause(0);assert.equal(added.length,0);assert.match(c.document.querySelector('.dmd-search-status').textContent,/whole number/);}quantity.value='3';c.emit(add,'click');await waitFor(()=>c.document.querySelector('.dmd-search-status').textContent==='Basket temporarily unavailable');assert.equal(add.disabled,false);assert.equal(quantity.value,'3');assert.equal(c.document.querySelector('[role="dialog"]'),null);fail=false;c.emit(add,'click');await waitFor(()=>c.document.querySelector('.dmd-search-status').textContent.includes('added to your basket'));assert.equal(added.length,2);assert.equal(added[1].quantity,3);assert.equal(c.document.querySelector('[role="dialog"]'),null);}finally{c.cleanup();}
