@@ -33,3 +33,8 @@ The NHS TRUD release dated 2026-11-09 supplies 145,806 active AMPP/VMPP packs, a
 Supplier quotes, availability, stock, Core deliveries, branch transfers, claims credits, support messages and forecasting are isolated simulations. They do not contact suppliers, other branches, the original support service or the original ordering backend. OCR extraction and trained AI are not connected. Support notes stay in the workspace. The demo login does not authenticate against the original site; hosted access remains protected by the private Site gate.
 
 Historical branch data, original forecasting parameters, supplier contracts, production PMR integration and hidden feature-flag rules were not copied. An interface match is not a claim of identical original server behavior. Desktop/mobile reference screenshots and computed styles were inspected; managed visual browser QA of the clone is unavailable in this session.
+
+
+## Mobile UI refinement
+
+The current interface intentionally improves on the reference screenshot: the oversized manual-search empty illustration is removed, search and ordering actions have priority, source details are disclosed on demand, and workspace-product cards open the same selection modal. Page headings, mobile touch targets, contrast, table overflow and safe-area bottom actions are consistent across the app. Original workflow navigation is retained.

@@ -21,6 +21,14 @@ export function normaliseDmdRecords(records) {
   }).slice(0,60);
 }
 
+/** Validate a workspace-card selection before opening the shared medicine modal. */
+export function prepareManualProductSelection(record,{quantity=1}={}) {
+  const product=normaliseDmdRecords([record])[0],count=Number(quantity);
+  if(!product)throw new Error('Choose a valid medicine.');
+  if((typeof quantity!=='number'&&typeof quantity!=='string')||!Number.isInteger(count)||count<1||count>999)throw new Error('Enter a whole number of packs between 1 and 999.');
+  return {record:product,quantity:count};
+}
+
 /** Retain one retry key for a pending direct order; edited inputs start a new attempt. */
 export function createManualOrderAttempt(makeId=()=>crypto.randomUUID()) {
   let signature=null,requestId=null,completed=false;
@@ -54,24 +62,24 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
   const listen=(target,type,callback,options={})=>target.addEventListener(type,callback,{...options,signal:abort.signal});
   const node=(tag,className,text)=>{const el=doc.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;};
   const root=node('section','manual-dmd panel');
-  const top=node('div','dmd-heading');
-  const heading=node('div',''),headingTitle=node('h2','','NHS dm+d medicine catalogue'),headingDescription=node('p','','Find a medicine, choose its pack, then send now or add it to your basket.');heading.append(headingTitle,headingDescription);
-  const provenanceBadge=node('span','badge purple','NHS dm+d · 9 Nov 2026');top.append(heading,provenanceBadge);
   const content=node('div','dmd-content');
-  const sourceField=node('label','dmd-source-field');sourceField.htmlFor=`${base}-source`;sourceField.append(node('span','','Lookup source'));
+  const provenanceBadge=node('span','dmd-provenance-badge','NHS dm+d · 9 Nov 2026');
+  const sourceField=node('label','dmd-source-field');sourceField.htmlFor=`${base}-source`;sourceField.append(node('span','','Catalogue'));
   const sourceSelect=node('select','dmd-source-select');sourceSelect.id=`${base}-source`;sourceSelect.name='catalogue-source';for(const [value,text] of [['live','NHS dm+d catalogue'],['sample','Sample products']]){const option=node('option','',text);option.value=value;sourceSelect.append(option);}sourceSelect.value=rememberedSource;sourceField.append(sourceSelect);
   const searchArea=node('div','dmd-search-area');
-  const label=node('label','dmd-search-label','Medicine name');label.htmlFor=`${base}-query`;
+  const label=node('label','dmd-search-label','Find a medicine');label.htmlFor=`${base}-query`;
   const inputWrap=node('div','dmd-input-wrap');inputWrap.append(node('span','dmd-search-icon','⌕'));
-  const input=node('input','dmd-query');input.id=`${base}-query`;input.type='search';input.maxLength=200;input.autocomplete='off';input.spellcheck=false;input.placeholder='Start typing a medicine, e.g. amoxicillin 500mg';input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-haspopup','listbox');input.setAttribute('aria-controls',`${base}-results`);input.setAttribute('aria-expanded','false');input.setAttribute('aria-describedby',`${base}-status`);inputWrap.append(input);
+  const input=node('input','dmd-query');input.id=`${base}-query`;input.type='search';input.maxLength=200;input.autocomplete='off';input.spellcheck=false;input.placeholder='Medicine name, strength or NHS code';input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-haspopup','listbox');input.setAttribute('aria-controls',`${base}-results`);input.setAttribute('aria-expanded','false');input.setAttribute('aria-describedby',`${base}-status`);inputWrap.append(input);
   const popover=node('div','dmd-popover');popover.hidden=true;
   const list=node('div','dmd-options');list.id=`${base}-results`;list.setAttribute('role','listbox');list.setAttribute('aria-label','Matching medicines');popover.append(list);
-  const status=node('div','dmd-search-status','Type at least 2 characters to search the medicine catalogue.');status.id=`${base}-status`;status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+  const status=node('div','dmd-search-status','Type at least 2 characters.');status.id=`${base}-status`;status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   searchArea.append(label,inputWrap,popover,status);
   const selection=node('div','dmd-selection');selection.hidden=true;
-  const note=node('p','dmd-sandbox-note','Medicine names, pack sizes and SNOMED CT identifiers come from the NHS dm+d release of 9 Nov 2026. dm+d list prices and Drug Tariff references are separate from simulated supplier prices and shelf stock.');
-  content.append(sourceField,searchArea,selection,note);root.append(top,content);host.replaceChildren(root);
-  let alive=true,timer,searchSequence=0,packSequence=0,query='',matches=[],activeIndex=-1,selected=null,packs=[],selectedPack=null,isSearching=false,isLoadingPacks=false,isAdding=false,medicineModal=null;
+  const note=node('p','dmd-sandbox-note');
+  const provenance=node('details','dmd-provenance-details');provenance.append(node('summary','','Catalogue details'),provenanceBadge,note);
+  const meta=node('div','dmd-catalogue-meta');meta.append(sourceField,provenance);
+  content.append(searchArea,selection,meta);root.append(content);host.replaceChildren(root);
+  let alive=true,timer,searchSequence=0,packSequence=0,query='',matches=[],activeIndex=-1,selected=null,packs=[],selectedPack=null,isSearching=false,isLoadingPacks=false,isAdding=false,medicineModal=null,optionPointer=null,lastPointerInteraction=null;
   const errorMessage=(result,fallback)=>typeof result?.error==='string'?result.error:typeof result?.error?.message==='string'?result.error.message:fallback;
   const releaseLabel=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))?new Date(value+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}):'';
   const packReference=pack=>{
@@ -105,7 +113,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
     if(notify&&alive)onClose();
     if(alive&&input.isConnected!==false)input.focus();
   }
-  function openMedicineModal() {
+  function openMedicineModal(initialQuantity=1) {
     closeMedicineModal({notify:false,force:true});
     const layer=node('div','manual-order-backdrop');layer.dataset.manualOrderModal='';
     const dialog=node('section','manual-order-dialog');dialog.tabIndex=-1;dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby',`${base}-modal-title`);
@@ -114,14 +122,14 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
     const body=node('div','manual-order-content');dialog.append(header,body);layer.append(dialog);
     const background=doc.getElementById('app'),previousOverflow=doc.body.style.overflow,previousInert=background?.inert;
     doc.body.style.overflow='hidden';if(background)background.inert=true;doc.body.append(layer);
-    medicineModal={layer,dialog,body,closeButton,previousOverflow,background,previousInert,attempt:createManualOrderAttempt()};
+    medicineModal={layer,dialog,body,closeButton,previousOverflow,background,previousInert,initialQuantity,attempt:createManualOrderAttempt()};
     input.disabled=true;sourceSelect.disabled=true;
     listen(closeButton,'click',()=>closeMedicineModal());
     listen(layer,'click',event=>{event.stopPropagation();if(event.target===layer)closeMedicineModal();});
     listen(layer,'keydown',event=>{
       if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeMedicineModal();return;}
       if(event.key==='Tab'){
-        const focusable=[...dialog.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(el=>!el.disabled&&el.tabIndex!==-1&&!el.hidden);
+        const focusable=[...dialog.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(el=>!el.disabled&&el.tabIndex!==-1&&!el.hidden&&(el.getClientRects?.().length??1)>0);
         const first=focusable[0],last=focusable.at(-1);
         if(!first){event.preventDefault();dialog.focus();return;}
         if(event.shiftKey&&(doc.activeElement===first||doc.activeElement===dialog)){event.preventDefault();last.focus();}
@@ -155,14 +163,16 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
     const packSelect=node('select','');packSelect.id=`${base}-pack`;packSelect.name='pack';
     packs.forEach((pack,index)=>{const option=node('option','',pack.pack?`${packLabel(pack)} · ${pack.name}`:pack.name);option.value=String(index);option.selected=selectedPack?.id===pack.id&&selectedPack?.type===pack.type;packSelect.append(option);});packField.append(packSelect);
     const row=node('div','manual-order-fields'),quantityField=node('label','field manual-order-quantity');quantityField.htmlFor=`${base}-quantity`;quantityField.append(node('span','','Number of packs'));
-    const quantity=node('input','');quantity.id=`${base}-quantity`;quantity.name='quantity';quantity.type='number';quantity.min='1';quantity.max='999';quantity.step='1';quantity.required=true;quantity.value='1';quantity.setAttribute('inputmode','numeric');quantityField.append(quantity);
+    const quantity=node('input','');quantity.id=`${base}-quantity`;quantity.name='quantity';quantity.type='number';quantity.min='1';quantity.max='999';quantity.step='1';quantity.required=true;quantity.value=String(current.initialQuantity);quantity.setAttribute('inputmode','numeric');quantityField.append(quantity);
     const supplierField=node('label','field manual-order-supplier');supplierField.htmlFor=`${base}-supplier`;supplierField.append(node('span','','Send to wholesaler'));
     const supplier=node('select','');supplier.id=`${base}-supplier`;supplier.name='supplier';for(const name of ['AAH','Phoenix','Alliance','BNS','Sigma','Trident','Warehouse']){const option=node('option','',name);option.value=name;option.selected=name===preferredSupplier;supplier.append(option);}supplierField.append(supplier);row.append(quantityField,supplierField);
     const notesField=node('label','field');notesField.htmlFor=`${base}-notes`;notesField.append(node('span','','Order note (optional)'));const notes=node('textarea','');notes.id=`${base}-notes`;notes.name='notes';notes.maxLength=500;notes.rows=2;notes.placeholder='Add a note for this test order';notesField.append(notes);
+    const notesDetails=node('details','manual-order-notes');notesDetails.append(node('summary','','Add an order note'),notesField);
     const reference=node('p','manual-order-reference',packReference(selectedPack));
+    const referenceDetails=node('details','manual-order-provenance');referenceDetails.append(node('summary','','Medicine details'),reference);
     const message=node('p','manual-order-status');message.setAttribute('role','status');message.setAttribute('aria-live','polite');message.tabIndex=-1;
     const actions=node('div','manual-order-actions'),add=node('button','btn manual-order-add','Add to basket'),send=node('button','btn btn-primary manual-order-send','Send now');add.type='button';send.type='submit';send.disabled=typeof onSend!=='function';actions.append(add,send);
-    form.append(packField,row,notesField,reference,node('p','manual-order-info','Send now creates only this item’s test order and shows the result here. Basket allocations can be changed in Review & Cascade.'),message,actions);body.append(form);
+    form.append(packField,row,notesDetails,referenceDetails,node('p','manual-order-info','Send now orders only this item. Your basket stays unchanged.'),message,actions);body.append(form);
     if(typeof onSend!=='function')message.textContent='Direct sending is unavailable. You can still add this item to the basket.';
     const controls=[packSelect,quantity,supplier,notes,add,send,current.closeButton];
     const edit=()=>{current.attempt.invalidate();message.textContent='';message.classList.remove('is-error');};
@@ -184,18 +194,18 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
     listen(add,'click',event=>{event.preventDefault();void submit('added');});
     listen(form,'submit',event=>{event.preventDefault();event.stopPropagation();void submit('sent');});
   }
-  async function chooseMatch(index){
+  async function chooseMatch(index,initialQuantity=1){
     const match=matches[index];if(!match||isAdding)return;
-    selected=match;selectedPack=null;packs=[];input.value=match.name;query=match.name;searchSequence++;clearTimeout(timer);closeMatches();openMedicineModal();selected=match;
+    selected=match;selectedPack=null;packs=[];input.value=match.name;query=match.name;searchSequence++;clearTimeout(timer);closeMatches();openMedicineModal(initialQuantity);selected=match;
     const sequence=++packSequence;
-    if(PACK_TYPES.has(match.type)){packs=[match];selectedPack=match;isLoadingPacks=false;renderSelection();setStatus('Selected medicine opened. Send now or add it to the basket.');return;}
+    if(PACK_TYPES.has(match.type)){packs=[match];selectedPack=match;isLoadingPacks=false;renderSelection();setStatus('Medicine selected.');return;}
     isLoadingPacks=true;renderSelection();setStatus('Loading available pack sizes…');
     try{
       const result=await request(`/api/dmd/packs?id=${encodeURIComponent(match.id)}&type=${encodeURIComponent(match.type)}&query=${encodeURIComponent(match.name)}`);
       if(!alive||sequence!==packSequence||!medicineModal)return;
       if(!result?.ok)throw new Error(errorMessage(result,'Pack lookup is unavailable. Please try again.'));
       packs=normaliseDmdRecords(result.data?.packs).filter(pack=>PACK_TYPES.has(pack.type));selectedPack=packs[0]||null;isLoadingPacks=false;renderSelection();
-      setStatus(packs.length?`${packs.length} ${packs.length===1?'pack option':'pack options'} available. Choose a pack and quantity.`:'No orderable packs were found for this medicine. Choose another match.');
+      setStatus(packs.length?`${packs.length} ${packs.length===1?'pack option':'pack options'} available.`:'No packs found. Choose another medicine.');
     }catch(error){if(!alive||sequence!==packSequence||!medicineModal)return;isLoadingPacks=false;renderSelection();const errorText=error?.message||'Could not load pack sizes.';const errorNode=medicineModal.body.querySelector('.manual-order-error');if(errorNode)errorNode.textContent=errorText;setStatus(errorText,true);onError(error);}
   }
   async function lookup(text,sequence){
@@ -204,26 +214,24 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
       const result=await request(isLive?`/api/dmd/search?q=${encodeURIComponent(text)}`:`/api/products?q=${encodeURIComponent(text)}`);
       if(!alive||sequence!==searchSequence)return;
       if(!result?.ok)throw new Error(errorMessage(result,'Medicine lookup is unavailable. Please try again.'));
-      matches=normaliseDmdRecords(isLive?result.data?.matches:Array.isArray(result.data)?result.data.map(product=>({...product,type:'SAMPLE',referencePrice:null})):[]);const release=isLive?releaseLabel(result.data?.releaseDate||matches[0]?.releaseDate):'';if(release)provenanceBadge.textContent=`NHS dm+d · ${release}`;showMatches();setStatus(matches.length?`${matches.length} matching ${matches.length===1?'medicine':'medicines'}. Use the arrow keys to choose a match.`:`No catalogue matches for “${text}”. Try another medicine name or strength.`);
+      matches=normaliseDmdRecords(isLive?result.data?.matches:Array.isArray(result.data)?result.data.map(product=>({...product,type:'SAMPLE',referencePrice:null})):[]);const release=isLive?releaseLabel(result.data?.releaseDate||matches[0]?.releaseDate):'';if(release)provenanceBadge.textContent=`NHS dm+d · ${release}`;showMatches();setStatus(matches.length?`${matches.length} matching ${matches.length===1?'pack':'packs'}.`:'No matches. Try a medicine name, strength or NHS code.');
     }catch(error){if(!alive||sequence!==searchSequence)return;matches=[];closeMatches();setStatus(`${error?.message||'Could not search the catalogue.'}${isLive?' Choose Sample products above to continue testing while catalogue search is unavailable.':''}`,true);onError(error);}
     finally{if(alive&&sequence===searchSequence){isSearching=false;input.removeAttribute('aria-busy');}}
   }
   function updateSourceLabels(){
     const isLive=sourceSelect.value==='live';
-    headingTitle.textContent=isLive?'NHS dm+d medicine catalogue':'Sample product catalogue';
-    headingDescription.textContent=isLive?'Find a medicine, choose its pack, then send now or add it to your basket.':'Choose a sample product to test ordering, receiving and shelf stock.';
     provenanceBadge.textContent=isLive?'NHS dm+d · 9 Nov 2026':'Sample data only';
-    note.textContent=isLive?'Medicine names, pack sizes and SNOMED CT identifiers come from the NHS dm+d release of 9 Nov 2026. dm+d list prices and Drug Tariff references are separate from simulated supplier prices and shelf stock.':'Sample products are test fixtures. Names, prices and stock shown here are not live catalogue or supplier data.';
-    input.placeholder=isLive?'Start typing a medicine, e.g. amoxicillin 500mg':'Search sample products, e.g. amoxicillin';
+    note.textContent=isLive?'145,806 current medicine packs from the NHS dm+d release. Reference prices are not live supplier quotes. Orders and shelf stock are simulated.':'Sample products are test fixtures. Prices and stock are simulated.';
+    input.placeholder=isLive?'Medicine name, strength or NHS code':'Search workspace sample products';
   }
   listen(sourceSelect,'change',()=>{
-    rememberedSource=sourceSelect.value;selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isSearching=false;isLoadingPacks=false;input.value='';input.removeAttribute('aria-busy');closeMatches();renderSelection();updateSourceLabels();setStatus(sourceSelect.value==='live'?'Type at least 2 characters to search NHS dm+d.':'Type at least 2 characters to search sample products.');input.focus();
+    rememberedSource=sourceSelect.value;selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isSearching=false;isLoadingPacks=false;input.value='';input.removeAttribute('aria-busy');closeMatches();renderSelection();updateSourceLabels();setStatus('Type at least 2 characters.');input.focus();
   });
   updateSourceLabels();
   listen(input,'input',()=>{
     query=input.value.trim();selected=null;packs=[];selectedPack=null;isLoadingPacks=false;packSequence++;renderSelection();clearTimeout(timer);matches=[];closeMatches();
     const sequence=++searchSequence;input.removeAttribute('aria-busy');isSearching=false;
-    if(query.length<2){setStatus('Type at least 2 characters to search the medicine catalogue.');return;}
+    if(query.length<2){setStatus('Type at least 2 characters.');return;}
     setStatus('Looking for matching medicines…');timer=setTimeout(()=>lookup(query,sequence),250);
   });
   listen(input,'focus',()=>{if(matches.length&&!selected)showMatches();});
@@ -234,12 +242,35 @@ export function mountManualSearch({host,request,onAdd,onSend,onClose=()=>{},pref
       activeIndex=event.key==='ArrowDown'?(activeIndex+1)%matches.length:(activeIndex<0?matches.length-1:(activeIndex-1+matches.length)%matches.length);updateActive();
     }else if(event.key==='Enter'&&!popover.hidden&&activeIndex>=0){event.preventDefault();event.stopPropagation();void chooseMatch(activeIndex);}
   });
-  listen(list,'pointerdown',event=>{if(event.target.closest('[data-dmd-index]'))event.preventDefault();});
-  listen(root,'click',event=>{
-    const option=event.target.closest('[data-dmd-index]');if(option&&root.contains(option)){event.preventDefault();event.stopPropagation();void chooseMatch(Number(option.dataset.dmdIndex));return;}
-    if(event.target.closest('[data-dmd-clear]')){event.preventDefault();event.stopPropagation();selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isLoadingPacks=false;input.value='';renderSelection();setStatus('Type at least 2 characters to search the medicine catalogue.');input.focus();}
+  // Touch/pen taps must activate on pointerup: cancelling touch pointerdown can
+  // suppress iOS's compatibility click. Keep the option visible while focus moves.
+  listen(list,'pointerdown',event=>{
+    const option=event.target.closest('[data-dmd-index]');if(!option)return;
+    if(!event.pointerType||event.pointerType==='mouse'){optionPointer=null;lastPointerInteraction=null;event.preventDefault();return;}
+    optionPointer={id:event.pointerId??0,option,index:Number(option.dataset.dmdIndex),sequence:searchSequence,x:event.clientX??0,y:event.clientY??0,moved:false};
   });
-  listen(doc,'pointerdown',event=>{if(!root.contains(event.target))closeMatches();});
-  listen(root,'focusout',()=>{queueMicrotask(()=>{if(alive&&!root.contains(doc.activeElement))closeMatches();});});
-  return ()=>{if(!alive)return;alive=false;searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
+  listen(doc,'pointermove',event=>{if(!optionPointer||(event.pointerId??0)!==optionPointer.id)return;if(Math.hypot((event.clientX??0)-optionPointer.x,(event.clientY??0)-optionPointer.y)>10)optionPointer.moved=true;});
+  listen(doc,'pointerup',event=>{
+    if(!optionPointer||(event.pointerId??0)!==optionPointer.id)return;
+    const gesture=optionPointer;optionPointer=null;
+    const moved=gesture.moved||Math.hypot((event.clientX??0)-gesture.x,(event.clientY??0)-gesture.y)>10;
+    const inside=gesture.option===event.target||gesture.option.contains(event.target);
+    lastPointerInteraction={option:gesture.option,until:Date.now()+700};
+    if(!alive||moved||!inside||!root.contains(gesture.option)||gesture.sequence!==searchSequence||medicineModal||isAdding)return;
+    event.preventDefault();event.stopPropagation();void chooseMatch(gesture.index);
+  });
+  listen(doc,'pointercancel',event=>{if(optionPointer&&(event.pointerId??0)===optionPointer.id){lastPointerInteraction={option:optionPointer.option,until:Date.now()+700};optionPointer=null;}});
+  listen(root,'click',event=>{
+    const option=event.target.closest('[data-dmd-index]');if(option&&root.contains(option)){event.preventDefault();event.stopPropagation();if(medicineModal||isAdding||(lastPointerInteraction?.option===option&&lastPointerInteraction.until>Date.now()))return;void chooseMatch(Number(option.dataset.dmdIndex));return;}
+    if(event.target.closest('[data-dmd-clear]')){event.preventDefault();event.stopPropagation();selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isLoadingPacks=false;input.value='';renderSelection();setStatus('Type at least 2 characters.');input.focus();}
+  });
+  listen(doc,'pointerdown',event=>{if(!root.contains(event.target)){optionPointer=null;closeMatches();}});
+  listen(root,'focusout',()=>{queueMicrotask(()=>{if(alive&&!medicineModal&&!optionPointer&&!root.contains(doc.activeElement))closeMatches();});});
+  const cleanup=()=>{if(!alive)return;alive=false;optionPointer=null;lastPointerInteraction=null;searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
+  cleanup.openProduct=(record,options={})=>{
+    if(!alive||isAdding)return false;
+    const prepared=prepareManualProductSelection(record,options);matches=[prepared.record];
+    void chooseMatch(0,prepared.quantity);return true;
+  };
+  return cleanup;
 }

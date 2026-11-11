@@ -1,8 +1,9 @@
 # Working on StockIQ
 
-Use Node.js 22 or newer. No dependency install is required.
+Use Node.js 22 or newer. Run `npm ci` to install the DOM-test development dependencies; the application and Worker have no runtime package dependencies.
 
 ```sh
+npm ci
 npm run check
 npm run build
 npm test
@@ -21,6 +22,7 @@ The local app runs at http://localhost:3000. `PORT` selects another loopback por
 | `src/manual-search.js` | Accessible dm+d picker and item-order modal, success/error/retry states |
 | `src/manual-orders.js` | Separate direct-send and basket API paths; updates totals without destroying the modal |
 | `src/parity.css` | Original shell, dense controls, tables, responsive/dark styles |
+| `src/ui-polish.css` | Final mobile-first visual layer: typography, touch targets, headers, cards, responsive tables and dialogs |
 | `src/parity-views.css` | Original page-specific layouts |
 | `src/styles.css`, `src/views.css`, `src/manual-search.css` | Base styles beneath the parity layers |
 | `server/api.mjs` | Sandbox data validation, actions, calculations and snapshot schema |
@@ -38,3 +40,7 @@ For stateless hosting the browser sends `POST /api/dispatch` with `{id,workspace
 The source is published to the owner's StockIQ GitHub repository. Sites hosting uses the separate repository credential and the exact same authored source commit/artifact. Runtime credentials, browser profiles and the TRUD key must never enter source control.
 
 Direct item submission uses `POST /api/orders/direct` with `{productId,quantity,supplier,notes,requestId}`. It creates one line and leaves the basket and shelf stock untouched. A repeated request ID with the same normalized payload replays its existing result; changed payloads require a new request ID. This retry protection is scoped to the browser workspace snapshot. The modal retains its key after an error and prevents duplicate clicks. Direct orders appear in History and Goods In alongside basket orders.
+
+Manual workspace-product cards use `choose-manual-product` and the picker's `cleanup.openProduct(record,{quantity})` method, so search results and existing workspace products open the same direct-send/basket modal. The compact catalogue source/provenance disclosure keeps reference details available without filling the mobile screen. Secondary header controls remain in the account menu on small screens.
+
+The DOM regression tests mount the real picker and app with Linkedom; gesture tests cover a completed touch selection versus a scroll/cancel and duplicate click suppression. Browser visual QA is separate from these tests.

@@ -6,9 +6,10 @@ A reconstruction of the StockIQ branch app from read-only inspection of the webs
 
 ## Run locally
 
-Requires Node.js 22 or newer. No packages need installing; the catalogue is included in the repository and source download. GitHub Actions runs syntax, build and automated checks on pushes and pull requests.
+Requires Node.js 22 or newer. The catalogue is included in the repository and source download. Install the small DOM-test development dependencies with `npm ci` before running the checks. GitHub Actions runs syntax, build and automated checks on pushes and pull requests.
 
 ```sh
+npm ci
 npm run build
 npm test
 npm start
@@ -36,7 +37,7 @@ The original main tabs and menus are reproduced:
 - Advanced: Branch Usage, Fast Lines, Delivery Times, Stock Count, Smart Orders, Analytics and Surplus.
 - Tools: Needs Attention, Screenshot Import, Stock Feedback, Saved Drafts and Order Analytics.
 
-Fast Lines supports cover, rounding and manual/auto targets. Delivery Times supports multiple vans, running days and arrival offsets. Weekly feedback separates stockouts/overstocks. Waste adjusts test stock; claims have workflow statuses and credits; surplus supports offer → request → dispatch → confirm → statement. The account menu contains source download, workspace settings, a demo sign-in screen and the developer API console.
+Fast Lines supports cover, rounding and manual/auto targets. Delivery Times supports multiple vans, running days and arrival offsets. Weekly feedback separates stockouts/overstocks. Waste adjusts test stock; claims have workflow statuses and credits; surplus supports offer → request → dispatch → confirm → statement. The account menu contains source download, workspace settings, appearance/text-size controls, support, surplus, a demo sign-in screen and the developer API console. Mobile screens use larger touch targets, readable controls and compact disclosures; selecting either a search result or workspace-product card opens the same ordering modal.
 
 See `docs/parity.md` for feature coverage and `docs/development.md` for the code layout.
 
@@ -91,6 +92,7 @@ Repository: `https://github.com/Mostafadmg/StockIQ`. The hosted draft's **Downlo
 ```sh
 git clone https://github.com/Mostafadmg/StockIQ.git
 cd StockIQ
+npm ci
 npm run build
 npm start
 ```
