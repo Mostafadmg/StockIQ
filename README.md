@@ -20,7 +20,7 @@ Open `http://localhost:3000`. Deep links including `/daily-orders`, `/inventory`
 ## Manual ordering with NHS dm+d
 
 1. Open **Manual Orders** and type at least two characters, such as `amoxicillin 500` or a brand name.
-2. Set the quantity beside a matching pack and use **Add to basket** to add it directly. The same shortcut is available for added medicines. This does not open a modal or send an order.
+2. Set the quantity beside a matching pack and use **Add to basket** to add it directly. The same shortcut is available in the order-items list below search. This does not open a modal or send an order.
 3. Alternatively, choose the medicine name to open its ordering modal, showing the NHS identifier, pack, manufacturer and available reference price. Set the pack quantity and test supplier. **Send now** creates an order for only that item and shows the result inside the modal, without changing the existing basket. **Add to basket** is also available inside the modal.
 4. Open **Basket** to navigate to the full **Order review** page at `/review`. Edit quantities and test suppliers, sort or remove lines, and save a draft. With no explicit selection, all ready lines are included; select lines to submit only those and keep the rest in the basket. **Submit to wholesalers** creates only isolated test orders. Receive test orders in **Goods In** to update test shelf stock.
 
@@ -31,13 +31,13 @@ Medicine and pack data are real reference records. Supplier costs and stock are 
 The original main tabs and menus are reproduced:
 
 - Auto Orders: pending/fast/OTC lines, shelf counts, selections and basket actions.
-- Manual Orders: searchable dm+d packs, added medicines and a fixed basket summary.
+- Manual Orders: searchable dm+d packs, a live basket/order-items list and a fixed basket summary.
 - Goods In: supplier cards, receipt queue and invoice references, Claims, Analytics and Settings.
 - History: grouped order/line timeline, status/supplier/date filters, reorder and spend summary.
 - Advanced: Branch Usage, Fast Lines, Delivery Times, Stock Count, Smart Orders, Analytics and Surplus.
 - Tools: Needs Attention, Screenshot Import, Stock Feedback, Saved Drafts and Order Analytics.
 
-Fast Lines supports cover, rounding and manual/auto targets. Delivery Times supports multiple vans, running days and arrival offsets. Weekly feedback separates stockouts/overstocks. Waste adjusts test stock; claims have workflow statuses and credits; surplus supports offer → request → dispatch → confirm → statement. The account menu contains source download, workspace settings, appearance/text-size controls, support, surplus, a demo sign-in screen and the developer API console. Mobile screens use larger touch targets, readable controls and compact disclosures; selecting a search result or added medicine opens the same ordering modal.
+Fast Lines supports cover, rounding and manual/auto targets. Delivery Times supports multiple vans, running days and arrival offsets. Weekly feedback separates stockouts/overstocks. Waste adjusts test stock; claims have workflow statuses and credits; surplus supports offer → request → dispatch → confirm → statement. The account menu contains source download, workspace settings, appearance/text-size controls, support, surplus, a demo sign-in screen and the developer API console. Mobile screens use larger touch targets, readable controls and compact disclosures; selecting a search result or an item below search opens the same ordering modal.
 
 See `docs/parity.md` for feature coverage and `docs/development.md` for the code layout.
 
@@ -104,4 +104,4 @@ Order results show the supplying test wholesaler, supplier reference, requested/
 Supplier comparison reports the lowest test total for the full pack quantity and breaks price ties using the earliest known delivery estimate. Current supplier prices may all tie; reference/list prices from dm+d remain separate from simulated supplier costs.
 
 
-Manual Orders uses a focused single-column layout with a padded medicine-search card. The scanner section and Workspace products sidebar have been removed. Medicine names open ordering options; adjacent Add to basket controls remain available.
+Manual Orders uses a focused single-column layout with a padded medicine-search card. The scanner section and Workspace products sidebar have been removed. Medicine names open ordering options; adjacent Add to basket controls remain available. Items actually added to the basket or submitted as orders appear below search immediately, including sample products. The list shows the saved order status and quantities; preview-only catalogue imports are excluded. Quantity editing keeps the dropdown open and preserves entered pack counts.

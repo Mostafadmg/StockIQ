@@ -310,28 +310,39 @@
 #main-content .stock-page-manual .dmd-popover { left:0; right:0; top:calc(100% + 8px); border:1px solid var(--line); border-radius:10px; background:var(--surface); box-shadow:0 12px 28px #11182714; }
 #main-content .stock-page-manual .dmd-options { max-height:min(420px,52dvh); padding:4px; }
 #main-content .stock-page-manual .dmd-result-row { grid-template-columns:minmax(0,1fr) auto; min-width:0; }
-#main-content .stock-page-manual .dmd-option { width:100%; min-height:72px; padding:14px 12px; gap:12px; border-radius:6px; }
+#main-content .stock-page-manual .dmd-option { width:100%; min-height:60px; padding:10px 12px; gap:12px; border-radius:6px; }
 #main-content .stock-page-manual .dmd-option strong { color:var(--ink); font-size:14px; font-weight:500; line-height:1.5; }
 #main-content .stock-page-manual .dmd-option small { margin-top:4px; color:var(--muted); font-size:12px; line-height:1.5; }
 #main-content .stock-page-manual .dmd-type { flex:none; padding:3px 6px; color:#6d28d9; background:#f5f3ff; border:1px solid #ede9fe; border-radius:5px; font-size:10px; }
-#main-content .stock-page-manual .dmd-result-actions { padding:12px; gap:8px; }
+#main-content .stock-page-manual .dmd-result-actions { padding:8px 12px; gap:8px; }
 #main-content .stock-page-manual .dmd-quick-add,#main-content .stock-page-manual .manual-quick-basket .btn { min-height:40px; margin:0; padding:10px 13px; color:#fff; background:#059669; border:1px solid #059669; border-radius:8px; font-size:12px; font-weight:600; }
 #main-content .stock-page-manual .dmd-quick-add:hover,#main-content .stock-page-manual .manual-quick-basket .btn:hover { background:#047857; border-color:#047857; }
 #main-content .stock-page-manual .manual-added-medicines { min-width:0; margin:0; overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--surface); box-shadow:none; }
-#main-content .stock-page-manual .manual-added-medicines>.stock-section-title { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0; padding:20px 24px; border-bottom:1px solid var(--line); }
+#main-content .stock-page-manual .manual-added-medicines>.stock-section-title { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0; padding:16px 20px; border-bottom:1px solid var(--line); }
 #main-content .stock-page-manual .manual-added-medicines .stock-section-title>div { display:block; min-width:0; }
 #main-content .stock-page-manual .manual-added-medicines .stock-section-title h2 { margin:0; color:var(--ink); font-size:16px; line-height:1.5; }
 #main-content .stock-page-manual .manual-added-medicines .stock-section-title p { margin:4px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
 #main-content .stock-page-manual .manual-added-count { flex:none; color:var(--muted); font-size:12px; }
 #main-content .stock-page-manual .manual-added-medicines .data-table { width:100%; min-width:0; }
-#main-content .stock-page-manual .manual-added-medicines .data-table th { padding:12px 16px; color:var(--muted); background:var(--shade); font-size:11px; font-weight:600; }
-#main-content .stock-page-manual .manual-added-medicines .data-table td { padding:16px; color:var(--ink); font-size:13px; line-height:1.5; white-space:normal; }
-#main-content .stock-page-manual .manual-added-medicines .data-table td:first-child { width:40%; }
-#main-content .stock-page-manual .manual-added-medicines .product-link { color:var(--ink); font-size:14px; line-height:1.5; font-weight:500; text-align:left; }
-#main-content .stock-page-manual .manual-added-medicines .product-meta { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+#main-content .stock-page-manual .manual-added-medicines .data-table th { padding:10px 12px; color:var(--muted); background:var(--shade); font-size:11px; font-weight:600; }
+#main-content .stock-page-manual .manual-added-medicines .data-table td { height:64px; padding:8px 12px; color:var(--ink); font-size:12px; line-height:1.4; vertical-align:middle; white-space:normal; }
+#main-content .stock-page-manual .manual-added-medicines .data-table td:first-child { width:30%; }
+#main-content .stock-page-manual .manual-added-medicines .product-link { color:var(--ink); font-size:13px; line-height:1.4; font-weight:500; text-align:left; }
+#main-content .stock-page-manual .manual-added-medicines .product-meta { display:block; margin-top:3px; color:var(--muted); font-size:11px; }
 #main-content .stock-page-manual .manual-quick-basket { padding:0; gap:8px; }
 #main-content .stock-page-manual .manual-quick-basket label { color:var(--muted); font-size:11px; }
 #main-content .stock-page-manual .manual-added-medicines td>.btn-text { margin-top:5px; min-height:30px; padding:4px 0; color:var(--purple); font-size:12px; }
+#main-content .stock-page-manual .manual-item-source { display:block; margin-top:4px; color:var(--muted); font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
+#main-content .stock-page-manual .manual-item-quantity strong,#main-content .stock-page-manual .manual-item-total strong { display:block; font-size:12px; line-height:1.4; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#main-content .stock-page-manual .manual-item-quantity small,#main-content .stock-page-manual .manual-item-total small,#main-content .stock-page-manual .manual-item-status>small { display:block; margin-top:3px; color:var(--muted); font-size:10px; line-height:1.4; }
+#main-content .stock-page-manual .manual-item-status .badge { padding:3px 6px; font-size:10px; line-height:1.4; white-space:nowrap; }
+#main-content .stock-page-manual .manual-item-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; }
+#main-content .stock-page-manual .manual-item-actions .manual-quick-basket { display:flex; align-items:center; gap:6px; flex:none; }
+#main-content .stock-page-manual .manual-item-actions .manual-quick-basket>label>span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+#main-content .stock-page-manual .manual-item-actions input { width:46px; min-width:46px; height:36px; min-height:36px; padding:6px 4px; font-size:12px; }
+#main-content .stock-page-manual .manual-item-actions .btn { min-height:38px; margin:0; padding:8px 10px; font-size:11px; line-height:1.4; white-space:nowrap; }
+#main-content .stock-page-manual .manual-item-actions>.btn-text { padding:8px 0; color:var(--purple); }
+#main-content .stock-page-manual .manual-items-empty { margin:0; padding:20px; color:var(--muted); font-size:13px; line-height:1.5; }
 #main-content .manual-continue { min-height:84px; padding:14px max(32px,calc((100vw - 1160px)/2)) calc(14px + env(safe-area-inset-bottom)); gap:20px; border-top:1px solid var(--line); background:var(--surface); box-shadow:0 -4px 18px #11182704; }
 #main-content .manual-continue .basket-supplier-tags { display:flex; flex:1; align-items:center; gap:8px; max-width:none; min-width:0; overflow:hidden; }
 #main-content .manual-continue .manual-empty-basket { color:var(--muted); font-size:13px; }
@@ -342,6 +353,26 @@
 #main-content .manual-continue .continue-button:hover { background:#1d4ed8; box-shadow:none; }
 .dark #main-content .stock-page-manual .manual-main .dmd-query { border-color:#4b5563; }
 .dark #main-content .stock-page-manual .dmd-type { color:#c4b5fd; background:#7c3aed1a; border-color:#7c3aed40; }
+@media(max-width:1023px) {
+  #main-content .stock-page-manual .manual-added-medicines .table-wrap { overflow:visible; }
+  #main-content .stock-page-manual .manual-added-medicines .data-table,#main-content .stock-page-manual .manual-added-medicines tbody { display:block; }
+  #main-content .stock-page-manual .manual-added-medicines thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+  #main-content .stock-page-manual .manual-added-medicines tbody tr { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; min-width:0; padding:16px 20px; border-bottom:1px solid var(--line); }
+  #main-content .stock-page-manual .manual-added-medicines tbody tr:last-child { border-bottom:0; }
+  #main-content .stock-page-manual .manual-added-medicines .data-table td { display:block; width:auto; height:auto; min-width:0; padding:0; border:0; font-size:12px; }
+  #main-content .stock-page-manual .manual-added-medicines .data-table td:first-child { grid-column:1/3; grid-row:1; width:auto; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(2) { grid-column:1; grid-row:2; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(3) { grid-column:2; grid-row:2; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(4) { grid-column:3; grid-row:2; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(5) { grid-column:3; grid-row:1; text-align:right; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(2)::before { content:'Wholesaler'; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(3)::before { content:'Packs'; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(4)::before { content:'Total'; }
+  #main-content .stock-page-manual .manual-added-medicines td:nth-child(2)::before,#main-content .stock-page-manual .manual-added-medicines td:nth-child(3)::before,#main-content .stock-page-manual .manual-added-medicines td:nth-child(4)::before { display:block; margin-bottom:4px; color:var(--muted); font-size:10px; }
+  #main-content .stock-page-manual .manual-added-medicines td:last-child { grid-column:1/-1; grid-row:3; }
+  #main-content .stock-page-manual .manual-item-actions { justify-content:flex-end; gap:16px; }
+  #main-content .stock-page-manual .manual-item-actions .btn,#main-content .stock-page-manual .manual-item-actions input { min-height:44px; height:44px; }
+}
 @media(max-width:767px) {
   #main-content.view-manual { padding:24px 16px 112px; }
   #main-content .stock-page-manual>.app-page-heading { margin-bottom:20px; }
@@ -354,25 +385,7 @@
   #main-content .stock-page-manual .dmd-result-row { grid-template-columns:minmax(0,1fr); }
   #main-content .stock-page-manual .dmd-result-actions { justify-content:flex-end; padding:0 12px 12px; }
   #main-content .stock-page-manual .dmd-option { min-height:64px; padding:12px; }
-  #main-content .stock-page-manual .dmd-quick-add,#main-content .stock-page-manual .manual-quick-basket .btn { min-height:44px; }
-  #main-content .stock-page-manual .manual-added-medicines>.stock-section-title { padding:18px 20px; align-items:flex-start; }
-  #main-content .stock-page-manual .manual-added-count { padding-top:3px; font-size:11px; }
-  #main-content .stock-page-manual .manual-added-medicines .table-wrap { overflow:visible; }
-  #main-content .stock-page-manual .manual-added-medicines .data-table,#main-content .stock-page-manual .manual-added-medicines tbody { display:block; }
-  #main-content .stock-page-manual .manual-added-medicines thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
-  #main-content .stock-page-manual .manual-added-medicines tbody tr { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px 12px; min-width:0; padding:20px; border-bottom:1px solid var(--line); }
-  #main-content .stock-page-manual .manual-added-medicines tbody tr:last-child { border-bottom:0; }
-  #main-content .stock-page-manual .manual-added-medicines .data-table td { display:block; width:auto; min-width:0; padding:0; border:0; font-size:12px; }
-  #main-content .stock-page-manual .manual-added-medicines .data-table td:first-child { grid-column:1/-1; width:auto; }
-  #main-content .stock-page-manual .manual-added-medicines td:nth-child(2)::before { content:'Pack'; }
-  #main-content .stock-page-manual .manual-added-medicines td:nth-child(3)::before { content:'Supplier'; }
-  #main-content .stock-page-manual .manual-added-medicines td:nth-child(4)::before { content:'Unit cost'; }
-  #main-content .stock-page-manual .manual-added-medicines td:nth-child(2)::before,#main-content .stock-page-manual .manual-added-medicines td:nth-child(3)::before,#main-content .stock-page-manual .manual-added-medicines td:nth-child(4)::before { display:block; margin-bottom:4px; color:var(--muted); font-size:10px; }
-  #main-content .stock-page-manual .manual-added-medicines td:last-child { display:flex; grid-column:1/-1; gap:16px; align-items:flex-end; }
-  #main-content .stock-page-manual .manual-added-medicines .manual-quick-basket { flex:1; }
-  #main-content .stock-page-manual .manual-added-medicines .manual-quick-basket>.btn { flex:1; }
-  #main-content .stock-page-manual .manual-added-medicines td>.btn-text { min-height:44px; margin:0; padding:10px 0; }
-  #main-content .stock-page-manual .manual-added-medicines td[colspan] { grid-column:1/-1; }
+  #main-content .stock-page-manual .dmd-quick-add { min-height:44px; }
   #main-content .manual-continue { min-height:80px; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); gap:14px; }
   #main-content .manual-continue .basket-supplier-tags { max-width:36%; }
   #main-content .manual-continue .continue-button { min-width:134px; }

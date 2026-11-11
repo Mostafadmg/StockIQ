@@ -84,7 +84,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   const provenance=node('details','dmd-provenance-details');provenance.append(node('summary','','Catalogue details'),provenanceBadge,note);
   const meta=node('div','dmd-catalogue-meta');meta.append(sourceField,provenance);
   content.append(heading,searchArea,selection,meta);root.append(content);host.replaceChildren(root);
-  let alive=true,timer,searchSequence=0,packSequence=0,query='',matches=[],activeIndex=-1,selected=null,packs=[],selectedPack=null,isSearching=false,isLoadingPacks=false,isAdding=false,medicineModal=null,optionPointer=null,lastPointerInteraction=null;
+  let alive=true,timer,focusTimer,searchSequence=0,packSequence=0,query='',matches=[],renderedMatches=null,activeIndex=-1,selected=null,packs=[],selectedPack=null,isSearching=false,isLoadingPacks=false,isAdding=false,medicineModal=null,optionPointer=null,lastPointerInteraction=null;
   const errorMessage=(result,fallback)=>typeof result?.error==='string'?result.error:typeof result?.error?.message==='string'?result.error.message:fallback;
   const releaseLabel=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))?new Date(value+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}):'';
   const packReference=pack=>{
@@ -95,11 +95,15 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     return parts.join(' · ');
   };
   const setStatus=(text,error=false)=>{if(!alive)return;status.textContent=text;status.classList.toggle('is-error',error);};
-  const closeMatches=()=>{popover.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');activeIndex=-1;};
+  const cancelFocusClose=()=>{clearTimeout(focusTimer);focusTimer=null;};
+  const closeMatches=()=>{cancelFocusClose();popover.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');activeIndex=-1;};
+  const deferFocusClose=()=>{cancelFocusClose();focusTimer=setTimeout(()=>{focusTimer=null;if(alive&&!medicineModal&&!isAdding&&!optionPointer&&!root.contains(doc.activeElement))closeMatches();},0);};
   const updateActive=()=>{[...list.querySelectorAll('[data-dmd-index]')].forEach((option,index)=>{option.classList.toggle('is-active',index===activeIndex);option.closest('[role=row]')?.setAttribute('aria-selected',String(index===activeIndex));});if(activeIndex>=0){input.setAttribute('aria-activedescendant',`${base}-option-${activeIndex}`);list.querySelector(`#${base}-option-${activeIndex}`)?.scrollIntoView?.({block:'nearest'});}else input.removeAttribute('aria-activedescendant');};
   function showMatches(){
+    if(renderedMatches===matches&&matches.length){popover.hidden=false;input.setAttribute('aria-expanded','true');updateActive();return;}
     list.replaceChildren();activeIndex=-1;input.removeAttribute('aria-activedescendant');
     if(!matches.length){closeMatches();return;}
+    renderedMatches=matches;
     matches.forEach((match,index)=>{
       const row=node('div','dmd-result-row');row.setAttribute('role','row');row.setAttribute('aria-selected','false');
       const medicineCell=node('div','dmd-result-medicine');medicineCell.setAttribute('role','gridcell');medicineCell.id=`${base}-option-${index}`;
@@ -333,13 +337,13 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
       activeIndex=event.key==='ArrowDown'?(activeIndex+1)%matches.length:(activeIndex<0?matches.length-1:(activeIndex-1+matches.length)%matches.length);updateActive();
     }else if(event.key==='Enter'&&!popover.hidden&&activeIndex>=0){event.preventDefault();event.stopPropagation();chooseResult(activeIndex);}
   });
-  // Keep dropdown controls visible while touch focus moves. Buttons activate
-  // on release; quantity fields retain native focus/editing and never activate.
+  // Keep native quantity inputs visible while pointer or keyboard focus moves.
+  // Touch buttons activate on release; quantity controls keep browser behavior.
   const quickAddResult=index=>{const quantity=list.querySelector(`[data-dmd-quantity="${index}"]`);void addProduct(matches[index],{quantity:quantity?.value||''}).catch(error=>{if(alive){setStatus(error?.message||'Could not add this pack.',true);quantity?.focus();}});};
   listen(list,'pointerdown',event=>{
     const option=event.target.closest('[data-dmd-index],[data-dmd-add],[data-dmd-quantity]');if(!option)return;
     const kind=option.hasAttribute('data-dmd-add')?'add':option.hasAttribute('data-dmd-quantity')?'quantity':'modal';
-    if(!event.pointerType||event.pointerType==='mouse'){optionPointer=null;lastPointerInteraction=null;if(kind!=='quantity')event.preventDefault();return;}
+    if((!event.pointerType||event.pointerType==='mouse')&&kind!=='quantity'){optionPointer=null;lastPointerInteraction=null;event.preventDefault();return;}
     const index=Number(kind==='add'?option.dataset.dmdAdd:kind==='quantity'?option.dataset.dmdQuantity:option.dataset.dmdIndex);
     optionPointer={id:event.pointerId??0,option,kind,index,sequence:searchSequence,x:event.clientX??0,y:event.clientY??0,moved:false};
   });
@@ -347,22 +351,24 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   listen(doc,'pointerup',event=>{
     if(!optionPointer||(event.pointerId??0)!==optionPointer.id)return;
     const gesture=optionPointer;optionPointer=null;
-    if(gesture.kind==='quantity')return;
+    if(gesture.kind==='quantity'){deferFocusClose();return;}
     const moved=gesture.moved||Math.hypot((event.clientX??0)-gesture.x,(event.clientY??0)-gesture.y)>10;
     const inside=gesture.option===event.target||gesture.option.contains(event.target);
     lastPointerInteraction={option:gesture.option,until:Date.now()+700};
     if(!alive||moved||!inside||!root.contains(gesture.option)||gesture.sequence!==searchSequence||medicineModal||isAdding)return;
     event.preventDefault();event.stopPropagation();if(gesture.kind==='add')quickAddResult(gesture.index);else chooseResult(gesture.index);
   });
-  listen(doc,'pointercancel',event=>{if(optionPointer&&(event.pointerId??0)===optionPointer.id){if(optionPointer.kind!=='quantity')lastPointerInteraction={option:optionPointer.option,until:Date.now()+700};optionPointer=null;}});
+  listen(doc,'pointercancel',event=>{if(optionPointer&&(event.pointerId??0)===optionPointer.id){const quantity=optionPointer.kind==='quantity';if(!quantity)lastPointerInteraction={option:optionPointer.option,until:Date.now()+700};optionPointer=null;if(quantity)deferFocusClose();}});
   listen(root,'click',event=>{
     const quickAdd=event.target.closest('[data-dmd-add]');if(quickAdd&&root.contains(quickAdd)){event.preventDefault();event.stopPropagation();if(medicineModal||isAdding||(lastPointerInteraction?.option===quickAdd&&lastPointerInteraction.until>Date.now()))return;quickAddResult(Number(quickAdd.dataset.dmdAdd));return;}
     const option=event.target.closest('[data-dmd-index]');if(option&&root.contains(option)){event.preventDefault();event.stopPropagation();if(medicineModal||isAdding||(lastPointerInteraction?.option===option&&lastPointerInteraction.until>Date.now()))return;chooseResult(Number(option.dataset.dmdIndex));return;}
     if(event.target.closest('[data-dmd-clear]')){event.preventDefault();event.stopPropagation();selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isLoadingPacks=false;input.value='';renderSelection();setStatus('Type at least 2 characters.');input.focus();}
   });
   listen(doc,'pointerdown',event=>{if(!root.contains(event.target)){optionPointer=null;closeMatches();}});
-  listen(root,'focusout',()=>{queueMicrotask(()=>{if(alive&&!medicineModal&&!isAdding&&!optionPointer&&!root.contains(doc.activeElement))closeMatches();});});
-  const cleanup=()=>{if(!alive)return;alive=false;optionPointer=null;lastPointerInteraction=null;searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
+  listen(root,'focusin',cancelFocusClose);
+  listen(root,'focusout',event=>{if(root.contains(event.relatedTarget)){cancelFocusClose();return;}deferFocusClose();});
+  listen(root,'keydown',event=>{if(event.key==='Escape'&&!popover.hidden){event.preventDefault();event.stopPropagation();optionPointer=null;input.focus();closeMatches();}});
+  const cleanup=()=>{if(!alive)return;alive=false;cancelFocusClose();optionPointer=null;lastPointerInteraction=null;searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
   cleanup.openProduct=(record,options={})=>{
     if(!alive||isAdding)return false;
     const prepared=prepareManualProductSelection(record,options);matches=[prepared.record];

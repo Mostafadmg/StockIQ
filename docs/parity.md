@@ -38,9 +38,9 @@ Historical branch data, original forecasting parameters, supplier contracts, pro
 
 ## Mobile UI refinement
 
-The current interface intentionally improves on the reference screenshot: the oversized manual-search empty illustration is removed, search and ordering actions have priority, source details are disclosed on demand, and added medicine names open the same selection modal. Page headings, mobile touch targets, contrast, table overflow and safe-area bottom actions are consistent across the app. Original workflow navigation is retained.
+The current interface intentionally improves on the reference screenshot: the oversized manual-search empty illustration is removed, search and ordering actions have priority, source details are disclosed on demand, and order-list medicine names open the same selection modal. Page headings, mobile touch targets, contrast, table overflow and safe-area bottom actions are consistent across the app. Original workflow navigation is retained.
 
-Medicine results and added medicines also offer a separate pack quantity and **Add to basket** button. These shortcuts keep the modal closed, update the basket summary and never submit an order; choosing the medicine name still opens its ordering options.
+Medicine results and order-list medicines also offer a separate pack quantity and **Add to basket** button. These shortcuts keep the modal closed, update the basket summary and never submit an order; choosing the medicine name still opens its ordering options.
 
 ## Acceptance and delivery flow
 
@@ -50,10 +50,12 @@ Manual Orders now previews supplier availability/cost/arrival and shows accepted
 
 ## Manual Orders simplification
 
-The owner requested removal of the complete scanner section and Workspace products sidebar. Manual Orders now centres the medicine search, with consistent card padding, a compact catalogue-details row and added medicines below. Name selection, Send now, direct Add to basket, supplier comparison and the basket review route remain available. There are no scanner controls, keyboard scan input or serial device connections.
+The owner requested removal of the complete scanner section and Workspace products sidebar. Manual Orders now centres the medicine search, with consistent card padding, a compact catalogue-details row and basket/ordered items below. Name selection, Send now, direct Add to basket, supplier comparison and the basket review route remain available. There are no scanner controls, keyboard scan input or serial device connections.
 
 ## Original visual theme
 
 The original public frontend styles and supplier map were read again on11November2026. Exact token values, asset paths and SHA256 hashes are recorded in `visual-reference.json`. The final `reference-theme.css` and `reference-pages.css` layers restore the original palette, supplier tags, font, compact controls and page-specific states over the earlier visual polish. Current source-defined Phoenix orange is#ea580c; the older captured#f97316 is superseded. The modal, Send now, direct Add to basket, test quotes and aligned date grouping are retained. Labels and values continue to describe the real reference versus simulated workspace data; the styling does not turn test values into live supplier data.
 
 No fresh authenticated browser or visual comparison was available: the shared desktop capability is enabled but reports state unknown, and the desktop JavaScript control tool is absent for the selected cloud environment. Current deployed CSS/JS contracts and prior reference captures provide evidence for the styling; they do not establish pixel-perfect visual equivalence on every route or viewport. The removed oversized magnifier is intentionally not reintroduced.
+
+The order-items list now refreshes immediately after basket additions or direct submissions. Saved acceptance/receipt facts remain distinct from basket quantities, and imported packs used only for quote previews are omitted. Dropdown quantity controls retain focus and their values when editing or returning to the medicine query. Normal rows use a medium density between the original compact reference and the first spacious redesign.

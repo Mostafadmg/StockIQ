@@ -1,13 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {renderView} from '../src/views.js';
+import {renderView,renderManualItems} from '../src/views.js';
 import {seedWorkspace} from '../server/api.mjs';
 const all=['auto','manual','goods','history','usage','fast','delivery','stock','smart','analytics','surplus','attention','import','feedback','drafts','order-analytics','api'];
 test('every observed main and menu page renders from the actual API seed',()=>{for(const view of all){const html=renderView(view,{state:seedWorkspace()});assert.ok(html.includes('<h1>'),view);assert.ok(!/undefined|NaN|\[object Object\]/.test(html),view);}});
 test('subtabs render usable read models',()=>{for(const [view,tabs] of Object.entries({auto:['orders','fast','otc'],goods:['deliveries','claims'],history:['all','Received','Part received','Awaiting'],stock:['overview','to-count','count-history','count'],smart:['forecast','orders'],analytics:['overview','regret','waste','prices','slow','performance'],'order-analytics':['overview','scorecard','shadow']})){for(const subtab of tabs){const html=renderView(view,{state:seedWorkspace(),subtab});assert.ok(html.includes('<h1>'));assert.ok(!/undefined|NaN|\[object Object\]/.test(html),`${view}/${subtab}`);}}});
-test('search and date filters select correct catalogue and history records',()=>{const state=seedWorkspace();state.products=state.products.map(p=>({...p,catalogueId:p.id}));const html=renderView('manual',{state,search:'amoxicillin'});assert.ok(html.includes('Amoxicillin'));const table=html.slice(html.indexOf('<tbody>'),html.indexOf('</tbody>'));assert.ok(!table.includes('Paracetamol'));assert.doesNotMatch(html,/Workspace products|workspace-product|concessionSearch/);const history=renderView('history',{state,historyFrom:'2099-01-01'});assert.ok(history.includes('No orders match'));});
+test('search and date filters select correct catalogue and history records',()=>{const state=seedWorkspace();const html=renderView('auto',{state,search:'amoxicillin'});assert.ok(html.includes('Amoxicillin'));const table=html.slice(html.indexOf('<tbody>'),html.indexOf('</tbody>'));assert.ok(!table.includes('Paracetamol'));assert.doesNotMatch(renderView('manual',{state}),/Workspace products|workspace-product|concessionSearch/);const history=renderView('history',{state,historyFrom:'2099-01-01'});assert.ok(history.includes('No orders match'));});
 test('record content is escaped in views',()=>{const state=seedWorkspace();state.products[0].name='<script>alert(1)</script>';const html=renderView('auto',{state});assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));});
 test('stock receipt and claim routes are actionable in Goods In',()=>{const html=renderView('goods',{state:seedWorkspace()});assert.ok(html.includes('data-action="receive"'));assert.ok(html.includes('data-action="claim"'));});
+
+test('manual order items include basket packs and exclude catalogue imports without an order',async()=>{
+ const {parseHTML}=await import('linkedom'),state=seedWorkspace(),sample={...state.products[0],quantity:2,price:1.5,supplier:'Sigma'};
+ state.orders=[];state.basket=[];state.products[0].catalogueId='imported-for-a-quote';
+ const empty=parseHTML(renderManualItems(state)).document;assert.equal(empty.querySelector('[data-manual-card]'),null);assert.match(empty.documentElement.textContent,/Items you add or order will appear here/);
+ state.basket=[sample];const document=parseHTML(renderView('manual',{state})).document,row=document.querySelector(`[data-manual-basket="${sample.id}"]`);
+ assert.ok(document.querySelector('#manual-catalogue + #manual-order-items'));assert.ok(row);assert.match(row.textContent,/In basket/);assert.match(row.textContent,/2 packs/);assert.match(row.querySelector('.manual-item-total').textContent,/£3.00/);assert.match(row.textContent,/Sigma/);assert.equal(row.querySelector('[data-manual-quantity]').value,'1','The reorder quantity is separate from the existing basket count');
+});
+
+test('manual order items preserve submitted snapshots, acceptance counts and repeated packs in newest-first order',async()=>{
+ const {parseHTML}=await import('linkedom'),state=seedWorkspace(),item={...state.products[0],name:'Original medicine snapshot',pack:'28 tablets',quantity:4,requestedQuantity:4,acceptedQuantity:2,received:0,price:2};
+ state.basket=[];state.products[0].name='Changed current catalogue name';state.products[0].price=99;
+ const earlier={id:'TEST-2101',supplier:'Phoenix',createdAt:'2026-11-10T11:00:00Z',status:'Awaiting',items:[item],fulfilment:{status:'partial',sourceLabel:'Phoenix test depot',supplierReference:'SIM-2101',delivery:{estimatedArrivalAt:'2026-11-12T09:00:00Z'}}};
+ const newer={id:'TEST-2102',supplier:'AAH',createdAt:'2026-11-11T11:00:00Z',status:'Received',items:[{...item,quantity:3,requestedQuantity:3,acceptedQuantity:3,received:3}],fulfilment:{status:'accepted'}};
+ state.orders=[earlier,newer];const document=parseHTML(renderManualItems(state)).document,rows=[...document.querySelectorAll('[data-manual-order]')];
+ assert.deepEqual(rows.map(row=>row.dataset.manualOrder),['TEST-2102','TEST-2101']);assert.match(rows[1].textContent,/Original medicine snapshot/);assert.doesNotMatch(document.documentElement.textContent,/Changed current catalogue name|£99/);assert.match(rows[1].querySelector('.manual-item-quantity').textContent,/2 of 4 accepted/);assert.match(rows[1].querySelector('.manual-item-total').textContent,/£4.00/);assert.match(rows[1].querySelector('.manual-item-status').textContent,/Part accepted/);assert.match(rows[1].textContent,/Phoenix test depot/);assert.match(rows[0].querySelector('.manual-item-status').textContent,/Received3 of 3 received/);
+});
+
+test('manual order items distinguish failed, unconfirmed and individually unavailable lines',async()=>{
+ const {parseHTML}=await import('linkedom'),base={...seedWorkspace().products[0],quantity:3,price:2},state={basket:[],orders:[
+  {id:'TEST-2201',supplier:'AAH',createdAt:'2026-11-11T12:00:00Z',status:'Failed',items:[base]},
+  {id:'TEST-2202',supplier:'AAH',createdAt:'2026-11-11T11:00:00Z',status:'Pending',items:[base]},
+  {id:'TEST-2203',supplier:'AAH',createdAt:'2026-11-11T10:00:00Z',status:'To follow',items:[base]},
+  {id:'TEST-2204',supplier:'Phoenix',createdAt:'2026-11-11T09:00:00Z',status:'Awaiting',items:[{...base,acceptedQuantity:0},{...base,id:'other',acceptedQuantity:3}],fulfilment:{status:'partial',sourceLabel:'<img src=x>'}}
+ ]};
+ const document=parseHTML(renderManualItems(state)).document,failed=document.querySelector('[data-manual-order="TEST-2201"]'),pending=document.querySelector('[data-manual-order="TEST-2202"]'),follow=document.querySelector('[data-manual-order="TEST-2203"]'),unavailable=document.querySelector('[data-manual-order="TEST-2204"]');
+ assert.match(failed.querySelector('.manual-item-status').textContent,/Failed/);assert.match(failed.querySelector('.manual-item-quantity').textContent,/0 of 3 accepted/);assert.match(failed.querySelector('.manual-item-total').textContent,/£0.00/);
+ for(const row of [pending,follow]){assert.match(row.textContent,/Acceptance pending/);assert.equal(row.querySelector('.manual-item-total strong').textContent,'—');assert.doesNotMatch(row.querySelector('.manual-item-status').textContent,/Accepted|Est /);}
+ assert.match(unavailable.querySelector('.manual-item-status').textContent,/Not accepted/);assert.ok(unavailable.querySelector('.badge.red'));assert.equal(document.querySelector('img'),null);assert.match(unavailable.textContent,/<img src=x>/);
+});
 
 
 test('every rendered action has an implemented core or feature handler',async()=>{const {parityActions}=await import('../src/parity-actions.js');const {readFile}=await import('node:fs/promises');const app=await readFile(new URL('../src/app.js',import.meta.url),'utf8');const supported=new Set([...parityActions,...[...app.matchAll(/name===['"]([^'"]+)['"]/g)].map(m=>m[1])]);const state=seedWorkspace();state.features.surplus.offers=[{id:'OFFER-1001',productId:'p009',quantity:2,available:1,unitPrice:.34,status:'active',createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+86400000).toISOString()}];state.features.surplus.transfers=[{id:'TRANSFER-1001',offerId:'OFFER-1001',productId:'p009',quantity:1,unitPrice:.34,total:.34,branch:'Demo branch',status:'Requested',createdAt:new Date().toISOString()}];const subviews={goods:['deliveries','claims','analytics','settings'],surplus:['offers','sent','statement','past'],analytics:['overview','regret','waste','prices','slow','performance'],stock:['overview','to-count','count-history','count']};for(const view of all){for(const subtab of subviews[view]||['']){const html=renderView(view,{state,subtab});for(const match of html.matchAll(/data-action="([^"]+)"/g))assert.ok(supported.has(match[1]),view+'/'+subtab+': '+match[1]);}}});

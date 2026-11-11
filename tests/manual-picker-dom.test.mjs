@@ -86,6 +86,30 @@ test('touching a quick quantity field keeps the dropdown open and native editing
  }finally{c.cleanup();}
 });
 
+test('mouse quantity clicks and repeated native stepper edits keep results open through transient blur',async()=>{
+ const added=[];const c=setup({onAdd:async selection=>{added.push(selection);return {};}});
+ try{await results(c);const quantity=c.document.querySelector('[data-dmd-quantity]'),popover=c.document.querySelector('.dmd-popover');
+  for(const value of ['2','3','4']){
+   const pointer={pointerType:'mouse',pointerId:31,clientX:720,clientY:185};assert.equal(c.emit(quantity,'pointerdown',pointer).defaultPrevented,false,'Native number input and stepper behavior stays available');
+   c.setFocused(c.document.body);c.emit(c.input,'focusout',{relatedTarget:null});await Promise.resolve();assert.equal(popover.hidden,false,'A mouse press on the quantity must survive the browser transient body focus');
+   c.setFocused(quantity);c.emit(quantity,'focusin');assert.equal(c.emit(quantity,'pointerup',pointer).defaultPrevented,false);assert.equal(c.emit(quantity,'click').defaultPrevented,false);quantity.value=value;c.emit(quantity,'input');c.emit(quantity,'change');await pause(0);
+   assert.equal(popover.hidden,false);assert.equal(c.document.querySelector('[data-dmd-quantity]'),quantity,'Native edits keep the same input element');assert.equal(quantity.value,value);
+  }
+  const add=c.document.querySelector('[data-dmd-add]');c.emit(add,'pointerdown',{pointerType:'mouse',pointerId:32});c.emit(add,'click');await waitFor(()=>added.length===1&&!add.disabled);assert.equal(added[0].quantity,4);assert.equal(c.document.querySelector('[role="dialog"]'),null);
+ }finally{c.cleanup();}
+});
+
+test('keyboard Tab and query refocus preserve edited result quantities while Escape and outside focus close results',async()=>{
+ const c=setup();try{await results(c);const quantity=c.document.querySelector('[data-dmd-quantity]'),popover=c.document.querySelector('.dmd-popover');quantity.value='7';
+  assert.equal(c.emit(c.input,'keydown',{key:'Tab'}).defaultPrevented,false);c.setFocused(c.document.body);c.emit(c.input,'focusout',{relatedTarget:quantity});await Promise.resolve();assert.equal(popover.hidden,false,'Tab to a result control stays inside the picker');c.setFocused(quantity);c.emit(quantity,'focusin');
+  assert.equal(c.emit(quantity,'keydown',{key:'ArrowUp'}).defaultPrevented,false);quantity.value='8';c.emit(quantity,'input');
+  c.setFocused(c.document.body);c.emit(quantity,'focusout',{relatedTarget:c.input});c.input.focus();c.emit(c.input,'focusin');await pause(0);assert.equal(popover.hidden,false);assert.equal(c.document.querySelector('[data-dmd-quantity]'),quantity,'Refocusing the query does not rebuild matching result controls');assert.equal(quantity.value,'8');
+  c.setFocused(quantity);c.emit(quantity,'focusin');const escape=c.emit(quantity,'keydown',{key:'Escape'});assert.equal(escape.defaultPrevented,true);assert.equal(popover.hidden,true,'Escape closes results from a quantity field');
+  c.input.focus();c.emit(c.input,'focusin');assert.equal(popover.hidden,false);assert.equal(c.document.querySelector('[data-dmd-quantity]').value,'8');
+  const outside=c.document.createElement('button');c.document.body.append(outside);c.setFocused(c.document.body);c.emit(c.input,'focusout',{relatedTarget:outside});c.setFocused(outside);await pause(0);assert.equal(popover.hidden,true,'Moving keyboard focus outside still closes results');
+ }finally{c.cleanup();}
+});
+
 test('direct basket add rejects invalid quantities and a failed request can be retried',async()=>{
  let fail=true;const added=[];const c=setup({onAdd:async selection=>{added.push(selection);if(fail)throw new Error('Basket temporarily unavailable');return {};}});
  try{await results(c);const quantity=c.document.querySelector('[data-dmd-quantity]'),add=c.document.querySelector('[data-dmd-add]');for(const value of ['','0','1.5','1000']){quantity.value=value;c.emit(add,'click');await pause(0);assert.equal(added.length,0);assert.match(c.document.querySelector('.dmd-search-status').textContent,/whole number/);}quantity.value='3';c.emit(add,'click');await waitFor(()=>c.document.querySelector('.dmd-search-status').textContent==='Basket temporarily unavailable');assert.equal(add.disabled,false);assert.equal(quantity.value,'3');assert.equal(c.document.querySelector('[role="dialog"]'),null);fail=false;c.emit(add,'click');await waitFor(()=>c.document.querySelector('.dmd-search-status').textContent.includes('added to your basket'));assert.equal(added.length,2);assert.equal(added[1].quantity,3);assert.equal(c.document.querySelector('[role="dialog"]'),null);}finally{c.cleanup();}
