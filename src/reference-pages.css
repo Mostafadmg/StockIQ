@@ -369,3 +369,25 @@
 .dark #main-content .stock-page-goods>.app-page-heading h1 { color:#e5e7eb; }
 .dark #main-content .manual-continue { background:#1f2937; border-color:#374151; }
 .dark #main-content .manual-continue .manual-total strong { color:#e5e7eb; }
+
+/* CDC scanners connect separately from keyboard input, using the same controls. */
+.manual-serial-controls { display:flex; align-items:end; flex-wrap:wrap; gap:8px; min-width:0; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.manual-serial-controls>label { display:grid; gap:4px; margin:0; color:var(--muted); font-size:11px; line-height:1.5; }
+.manual-serial-controls .btn,.manual-serial-release { min-height:38px; margin:0; padding:8px 12px; border-radius:var(--radius-ui); font-size:12px; line-height:1.5; }
+.manual-serial-baud { width:110px; max-width:100%; min-height:38px; margin:0; padding:7px 10px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-ui); font-size:12px; line-height:1.5; }
+.manual-serial-help,.manual-serial-status { margin:8px 0 0; color:var(--muted); font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
+.manual-serial-status.is-ready { color:#059669; }
+.manual-serial-status.is-error { color:#dc2626; }
+.manual-serial-status.is-loading { color:#7c3aed; }
+.manual-serial-controls [hidden],.manual-serial-release[hidden],.manual-serial-status:empty { display:none; }
+.manual-serial-release { flex-shrink:0; }
+.manual-order-header:has(.manual-serial-release:not([hidden])) { gap:8px; }
+.manual-order-header:has(.manual-serial-release:not([hidden])) h2 { flex:1; min-width:0; }
+.manual-order-header .manual-order-close { flex:none; }
+.manual-serial-modal-status { margin:10px 22px 0; color:var(--muted); font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
+.manual-serial-modal-status:empty { display:none; }
+@media(max-width:600px) {
+  .manual-serial-controls .btn,.manual-serial-release,.manual-serial-baud { min-height:44px; }
+  .manual-serial-controls .manual-serial-connect { flex:1 1 190px; white-space:normal; }
+  .manual-serial-modal-status { margin:10px 16px 0; }
+}

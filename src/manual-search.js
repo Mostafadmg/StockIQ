@@ -1,4 +1,5 @@
 /** Accessible NHS dm+d medicine and pack picker. All requests stay on the draft origin. */
+import {createSerialScanner} from './serial-scanner.js';
 let pickerCount=0;
 // Remember only an explicit source choice during this page session; the initial choice is live.
 let rememberedSource='live';
@@ -56,7 +57,7 @@ export function createManualOrderAttempt(makeId=()=>crypto.randomUUID()) {
  * onAdd(payload) imports the pack into the basket; onSend(payload) creates only its direct test order.
  * onClose runs only after a user closes the owned modal, never during component cleanup.
  */
-export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,onClose=()=>{},preferredSupplier='Phoenix',onError=()=>{}}={}) {
+export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,onClose=()=>{},preferredSupplier='Phoenix',onError=()=>{},serial=globalThis.navigator?.serial}={}) {
   if(!host||typeof request!=='function'||typeof onAdd!=='function')throw new TypeError('A host, request and onAdd callback are required.');
   const doc=host.ownerDocument,instance=++pickerCount,base=`dmd-picker-${instance}`;
   const abort=new AbortController();
@@ -74,7 +75,12 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   const scanLookup=node('button','btn manual-scan-lookup','Find pack');scanLookup.type='button';scanControls.append(scanInput,scanLookup);
   const scanHelp=node('p','manual-scan-help','USB scanner in keyboard mode · Finish each scan with Enter or Tab. Scanning never sends an order.');scanHelp.id=`${base}-scan-help`;
   const scanStatus=node('p','manual-scan-status','Click Ready to scan, then scan the pack.');scanStatus.id=`${base}-scan-status`;scanStatus.setAttribute('role','status');scanStatus.setAttribute('aria-live','polite');
-  const scanMatchesHost=node('div','manual-scan-matches');scanMatchesHost.hidden=true;scanPanel.append(scanHeading,scanControls,scanHelp,scanStatus,scanMatchesHost);
+  const serialControls=node('div','manual-serial-controls'),serialConnect=node('button','btn btn-soft manual-serial-connect','Connect serial scanner'),serialCancel=node('button','btn manual-serial-cancel','Cancel scanner');serialConnect.type=serialCancel.type='button';serialCancel.hidden=true;
+  const serialBaudLabel=node('label','manual-serial-baud-label');serialBaudLabel.htmlFor=`${base}-serial-baud`;serialBaudLabel.append(node('span','','Baud rate'));
+  const serialBaud=node('select','manual-serial-baud');serialBaud.id=`${base}-serial-baud`;for(const rate of [9600,19200,38400,57600,115200]){const option=node('option','',String(rate));option.value=String(rate);serialBaud.append(option);}serialBaud.value='9600';serialBaudLabel.append(serialBaud);serialControls.append(serialConnect,serialCancel,serialBaudLabel);
+  const serialHelp=node('p','manual-serial-help','For your USB CDC scanner, choose Newland (COM7) in the browser prompt. Proscript must release the port first. Match the baud rate to your scanner settings; 9600 is only the starting value.');
+  const serialStatus=node('p','manual-serial-status');serialStatus.setAttribute('role','status');serialStatus.setAttribute('aria-live','polite');
+  const scanMatchesHost=node('div','manual-scan-matches');scanMatchesHost.hidden=true;scanPanel.append(scanHeading,scanControls,scanHelp,serialControls,serialHelp,serialStatus,scanStatus,scanMatchesHost);
   const searchArea=node('div','dmd-search-area');
   const label=node('label','dmd-search-label','Find a medicine');label.htmlFor=`${base}-query`;
   const inputWrap=node('div','dmd-input-wrap');inputWrap.append(node('span','dmd-search-icon','⌕'));
@@ -88,7 +94,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   const provenance=node('details','dmd-provenance-details');provenance.append(node('summary','','Catalogue details'),provenanceBadge,note);
   const meta=node('div','dmd-catalogue-meta');meta.append(sourceField,provenance);
   content.append(scanPanel,searchArea,selection,meta);root.append(content);host.replaceChildren(root);
-  let alive=true,timer,searchSequence=0,packSequence=0,query='',matches=[],activeIndex=-1,selected=null,packs=[],selectedPack=null,isSearching=false,isLoadingPacks=false,isAdding=false,medicineModal=null,optionPointer=null,lastPointerInteraction=null,scanBusy=false,scanSequence=0,scanMatches=[],pendingScanMetadata=null;
+  let alive=true,timer,searchSequence=0,packSequence=0,query='',matches=[],activeIndex=-1,selected=null,packs=[],selectedPack=null,isSearching=false,isLoadingPacks=false,isAdding=false,medicineModal=null,optionPointer=null,lastPointerInteraction=null,scanBusy=false,scanSequence=0,scanMatches=[],pendingScanMetadata=null,serialState='idle',serialHasPartial=false,serialScanner;
   const errorMessage=(result,fallback)=>typeof result?.error==='string'?result.error:typeof result?.error?.message==='string'?result.error.message:fallback;
   const releaseLabel=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))?new Date(value+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}):'';
   const packReference=pack=>{
@@ -124,11 +130,11 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     if(!alive||isAdding||medicineModal||scanBusy)return false;
     const prepared=prepareManualProductSelection(record,{quantity}),pack=prepared.record;
     if(!PACK_TYPES.has(pack.type))throw new Error('Choose a medicine pack before adding to the basket.');
-    isAdding=true;const sequence=searchSequence,focused=doc.activeElement,controls=[input,sourceSelect,scanInput,scanLookup,scanFocus,...root.querySelectorAll('[data-dmd-add],[data-dmd-quantity]')],disabled=controls.map(control=>control.disabled);
+    isAdding=true;serialScanner.discardPending({untilTerminator:true});serialHasPartial=false;updateSerialControls();const sequence=searchSequence,focused=doc.activeElement,controls=[input,sourceSelect,scanInput,scanLookup,scanFocus,...root.querySelectorAll('[data-dmd-add],[data-dmd-quantity]')],disabled=controls.map(control=>control.disabled);
     controls.forEach(control=>control.disabled=true);setStatus(`Adding ${prepared.quantity} ${prepared.quantity===1?'pack':'packs'} to basket…`);
     try{await onAdd({id:pack.id,type:pack.type,query:pack.name.slice(0,200),quantity:prepared.quantity});if(alive&&sequence===searchSequence)setStatus(`${prepared.quantity} ${prepared.quantity===1?'pack':'packs'} of ${pack.name} added to your basket. Review the basket before sending.`);return true;}
     catch(error){if(alive&&sequence===searchSequence)setStatus(error?.message||'Could not add this pack. Try again.',true);onError(error);throw error;}
-    finally{isAdding=false;if(alive){controls.forEach((control,index)=>control.disabled=disabled[index]);if(doc.activeElement===doc.body&&root.contains(focused)&&focused.isConnected!==false)focused.focus();}}
+    finally{isAdding=false;serialScanner.discardPending({untilTerminator:true});serialHasPartial=false;if(alive){updateSerialControls();controls.forEach((control,index)=>control.disabled=disabled[index]);if(doc.activeElement===doc.body&&root.contains(focused)&&focused.isConnected!==false)focused.focus();}}
   }
   function chooseResult(index){
     const quantity=list.querySelector(`[data-dmd-quantity="${index}"]`),count=quantity?Number(quantity.value):1;
@@ -136,8 +142,43 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     void chooseMatch(index,count);
   }
   const setScanStatus=(text,error=false)=>{if(!alive)return;scanStatus.textContent=text;scanStatus.classList.toggle('is-error',error);};
+  const hasSerialSession=()=>['connecting','connected','stopping'].includes(serialState);
+  const serialBlocked=()=>Boolean(medicineModal)||scanBusy||isAdding;
+  function updateSerialControls(){
+    if(!alive)return;
+    const active=hasSerialSession(),supported=Boolean(serialScanner?.supported);
+    serialConnect.disabled=!supported||active||Boolean(medicineModal)||isAdding;serialCancel.hidden=!active;serialCancel.disabled=serialState==='stopping';serialBaud.disabled=active;
+    for(const release of doc.querySelectorAll(`[data-serial-release="${base}"]`)){release.hidden=!active;release.disabled=serialState==='stopping';}
+    for(const message of doc.querySelectorAll(`[data-serial-status="${base}"]`)){if(active)message.dataset.serialWasActive='true';message.hidden=!active&&message.dataset.serialWasActive!=='true';message.textContent=serialState==='connected'?'Serial scanner connected. Scanning is paused while this item is open. Close it before scanning another pack.':serialStatus.textContent;}
+  }
+  function setSerialStatus(text,error=false){if(!alive)return;serialStatus.textContent=text;serialStatus.classList.toggle('is-error',error);updateSerialControls();}
+  function releaseSerialScanner(){
+    if(!hasSerialSession())return;
+    serialScanner.discardPending();serialHasPartial=false;if(!medicineModal)cancelScan();
+    void serialScanner.stop();
+  }
+  serialScanner=createSerialScanner({serial,
+    onState:({state,message})=>{
+      if(!alive)return;serialState=state;
+      const text=state==='connecting'?'Choose the Newland scanner in the browser prompt.':state==='connected'?'Serial scanner ready. Cancel scanner releases the port.':state==='stopping'?'Releasing the serial scanner…':state==='idle'?'Serial scanner released. Proscript may need its scanner connection restarted.':message||'Serial scanner could not connect.';
+      setSerialStatus(text,state==='error');
+      if(state==='connected'&&!serialBlocked())setScanStatus('Ready. Scan a pack. Scanning only identifies the medicine; it never sends an order.');
+      if((state==='idle'||state==='error')&&!serialBlocked())setScanStatus('Connect the serial scanner again, or use Ready to scan for a keyboard scanner.');
+    },
+    onError:error=>{if(alive)setSerialStatus(error?.message||'Serial scanner could not connect.',error?.code!=='CANCELLED');},
+    onPartial:value=>{
+      if(!alive)return;
+      if(serialBlocked()){serialHasPartial=false;if(value)serialScanner.discardPending({untilTerminator:true});return;}
+      serialHasPartial=Boolean(value);if(value)setScanStatus('Receiving a serial barcode. If the scanner has no suffix, select Find pack when the scan finishes.');
+    },
+    onFrame:frame=>{
+      serialHasPartial=false;if(!alive||serialBlocked())return;
+      scanInput.value=frame;void lookupBarcode();
+    }
+  });
+  setSerialStatus(serialScanner.supported?'Use Connect serial scanner for a USB CDC device.':'Serial connection needs desktop Chrome or Edge. Open this page directly in the browser; keyboard scanning is still available.');
   const clearScanChoices=()=>{scanMatches=[];pendingScanMetadata=null;scanMatchesHost.replaceChildren();scanMatchesHost.hidden=true;};
-  const cancelScan=()=>{scanSequence++;scanBusy=false;scanInput.value='';scanInput.readOnly=false;scanLookup.disabled=scanFocus.disabled=false;clearScanChoices();};
+  const cancelScan=()=>{serialScanner.discardPending({untilTerminator:true});serialHasPartial=false;scanSequence++;scanBusy=false;scanInput.value='';scanInput.readOnly=false;scanLookup.disabled=scanFocus.disabled=false;clearScanChoices();};
   const safeScanMetadata=data=>({gtin:typeof data.gtin==='string'?data.gtin.slice(0,14):'',format:data.format==='gs1'?'gs1':'ean',batch:typeof data.batch==='string'?data.batch.slice(0,40):null,expiry:typeof data.expiry==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(data.expiry)?data.expiry:null,historical:data.historical===true,requiresPackConfirmation:data.requiresPackConfirmation===true,warnings:Array.isArray(data.warnings)?data.warnings.filter(value=>typeof value==='string').slice(0,8).map(value=>value.slice(0,300)):[]});
   function renderScanSummary(metadata){
     const summary=node('section','manual-scan-summary');summary.setAttribute('aria-label','Scanned pack details');summary.append(node('strong','','Scanned pack'));
@@ -151,6 +192,7 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   async function lookupBarcode(){
     if(!alive||scanBusy||medicineModal||isAdding)return;
     const raw=scanInput.value;if(!raw.trim()){setScanStatus('Scan or paste a medicine barcode first.',true);scanInput.focus();return;}
+    serialScanner.discardPending({untilTerminator:true});serialHasPartial=false;
     clearTimeout(timer);searchSequence++;matches=[];closeMatches();isSearching=false;input.removeAttribute('aria-busy');
     clearScanChoices();scanInput.value='';scanBusy=true;const sequence=++scanSequence;scanInput.readOnly=true;scanLookup.disabled=scanFocus.disabled=true;setScanStatus('Finding the exact NHS dm+d pack…');
     try{
@@ -166,7 +208,13 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   }
   const insertScanText=text=>{const start=Number.isInteger(scanInput.selectionStart)?scanInput.selectionStart:scanInput.value.length,end=Number.isInteger(scanInput.selectionEnd)?scanInput.selectionEnd:start;scanInput.value=(scanInput.value.slice(0,start)+text+scanInput.value.slice(end)).slice(0,1024);scanInput.setSelectionRange?.(start+text.length,start+text.length);};
   listen(scanFocus,'click',()=>{if(scanBusy||medicineModal)return;scanInput.focus();setScanStatus('Ready. Scan a pack, then press Enter or Tab if your scanner has no suffix.');});
-  listen(scanLookup,'click',()=>void lookupBarcode());
+  listen(scanLookup,'click',()=>{if(!scanInput.value&&serialHasPartial){serialScanner.flushPending();return;}void lookupBarcode();});
+  listen(serialConnect,'click',()=>{
+    if(hasSerialSession()||serialBlocked())return;
+    cancelScan();void serialScanner.connect({baudRate:Number(serialBaud.value)});
+  });
+  listen(serialCancel,'click',releaseSerialScanner);
+  if(doc.defaultView)listen(doc.defaultView,'pagehide',releaseSerialScanner);
   listen(scanInput,'input',()=>{if(!scanBusy)clearScanChoices();});
   listen(scanInput,'paste',event=>{const value=event.clipboardData?.getData('text');if(typeof value!=='string'||scanBusy)return;event.preventDefault();event.stopPropagation();insertScanText(value);clearScanChoices();});
   listen(scanInput,'keydown',event=>{if(event.key==='GroupSeparator'||event.ctrlKey&&event.key===']'){event.preventDefault();event.stopPropagation();if(!scanBusy)insertScanText('\u001d');return;}if(event.key==='Enter'||event.key==='Tab'&&(scanInput.value||scanBusy)){event.preventDefault();event.stopPropagation();void lookupBarcode();}});
@@ -178,7 +226,8 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     doc.body.style.overflow=current.previousOverflow;if(current.background)current.background.inert=current.previousInert;
     input.disabled=false;sourceSelect.disabled=false;scanInput.disabled=false;scanLookup.disabled=scanFocus.disabled=false;selected=null;selectedPack=null;packs=[];selection.hidden=true;
     if(resetSearch){input.value='';query='';matches=[];searchSequence++;closeMatches();}
-    if(notify&&alive)onClose();
+    serialScanner.discardPending({untilTerminator:true});serialHasPartial=false;updateSerialControls();
+    if(notify&&alive)onClose({serialActive:hasSerialSession()});
     if(current.scanMetadata)doc.querySelector('.manual-scan-input')?.focus();else if(alive&&input.isConnected!==false)input.focus();
   }
   function openMedicineModal(initialQuantity=1,scanMetadata=null) {
@@ -186,11 +235,15 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
     const layer=node('div','manual-order-backdrop');layer.dataset.manualOrderModal='';
     const dialog=node('section','manual-order-dialog');dialog.tabIndex=-1;dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby',`${base}-modal-title`);
     const header=node('div','manual-order-header'),title=node('h2','', 'Manual order');title.id=`${base}-modal-title`;
-    const closeButton=node('button','manual-order-close','×');closeButton.type='button';closeButton.setAttribute('aria-label','Close manual order');header.append(title,closeButton);
+    const closeButton=node('button','manual-order-close','×');closeButton.type='button';closeButton.setAttribute('aria-label','Close manual order');
+    const release=node('button','btn btn-soft manual-serial-release','Cancel scanner');release.type='button';release.dataset.serialRelease=base;release.hidden=!hasSerialSession();listen(release,'click',releaseSerialScanner);
+    header.append(title,release,closeButton);
     const body=node('div','manual-order-content');dialog.append(header,body);layer.append(dialog);
     const background=doc.getElementById('app'),previousOverflow=doc.body.style.overflow,previousInert=background?.inert;
     doc.body.style.overflow='hidden';if(background)background.inert=true;doc.body.append(layer);
     medicineModal={layer,dialog,body,closeButton,previousOverflow,background,previousInert,initialQuantity,scanMetadata,selectedSupplier:preferredSupplier,quoteSequence:0,quoteChain:Promise.resolve(),attempt:createManualOrderAttempt()};
+    const serialModalStatus=node('p','manual-serial-modal-status');serialModalStatus.dataset.serialStatus=base;serialModalStatus.setAttribute('role','status');serialModalStatus.setAttribute('aria-live','polite');serialModalStatus.textContent=hasSerialSession()?serialStatus.textContent:'';dialog.insertBefore(serialModalStatus,body);
+    serialScanner.discardPending({untilTerminator:true});serialHasPartial=false;updateSerialControls();
     input.disabled=true;sourceSelect.disabled=true;scanInput.disabled=true;scanLookup.disabled=scanFocus.disabled=true;
     listen(closeButton,'click',()=>closeMedicineModal());
     listen(layer,'click',event=>{event.stopPropagation();if(event.target===layer)closeMedicineModal();});
@@ -401,12 +454,13 @@ export function mountManualSearch({host,request,onAdd,onSend,onQuote,onCompare,o
   });
   listen(doc,'pointerdown',event=>{if(!root.contains(event.target)){optionPointer=null;closeMatches();}});
   listen(root,'focusout',()=>{queueMicrotask(()=>{if(alive&&!medicineModal&&!isAdding&&!optionPointer&&!root.contains(doc.activeElement))closeMatches();});});
-  const cleanup=()=>{if(!alive)return;alive=false;optionPointer=null;lastPointerInteraction=null;scanSequence++;scanInput.value='';clearScanChoices();searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
+  const cleanup=()=>{if(!alive)return;alive=false;serialScanner.discardPending();void serialScanner.stop();optionPointer=null;lastPointerInteraction=null;scanSequence++;scanInput.value='';clearScanChoices();searchSequence++;packSequence++;clearTimeout(timer);closeMedicineModal({notify:false,force:true});abort.abort();root.remove();};
   cleanup.openProduct=(record,options={})=>{
     if(!alive||isAdding)return false;
     const prepared=prepareManualProductSelection(record,options);matches=[prepared.record];
     void chooseMatch(0,prepared.quantity);return true;
   };
   cleanup.addProduct=addProduct;
+  cleanup.hasSerialSession=hasSerialSession;
   return cleanup;
 }

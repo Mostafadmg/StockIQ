@@ -20,6 +20,7 @@ The local app runs at http://localhost:3000. `PORT` selects another loopback por
 | `src/views.js` | Page markup and derived read models for tabs and subviews |
 | `src/parity-actions.js` | Delivery vans, Fast Lines, reviews, claims, waste, support, surplus and cascade interactions |
 | `src/manual-search.js` | Accessible dm+d picker and item-order modal, success/error/retry states |
+| `src/serial-scanner.js` | Read-only Web Serial scanner transport, scan framing and connection cleanup |
 | `src/manual-orders.js` | Separate direct-send and basket API paths; updates totals without destroying the modal |
 | `src/parity.css` | Original shell, dense controls, tables, responsive/dark styles |
 | `src/ui-polish.css` | Final mobile-first visual layer: typography, touch targets, headers, cards, responsive tables and dialogs |
@@ -54,7 +55,9 @@ Supplier quote checks use `POST /api/orders/quote`. Manual quote calls are seria
 
 ## Connected barcode scanners
 
-The Newland NLS-FR40 workflow follows the keyboard-scanner approach inspected read-only in `Mostafadmg/mellonsdaily` at `76ddd733c25374e53afd28bb0baa0f2c3f63d5e2`. No device SDK, camera permission or production retrieval connection is required. Configure the physical scanner as a USB HID keyboard with an Enter or Tab suffix and preserve GS1 FNC1/group separators (ASCII29 / Ctrl+]). Click Ready to scan in Manual Orders before scanning. The app does not intercept typing in other controls or program the scanner.
+The keyboard-scanner workflow follows the approach inspected read-only in `Mostafadmg/mellonsdaily` at `76ddd733c25374e53afd28bb0baa0f2c3f63d5e2`. Devices already in USB HID keyboard mode use Ready to scan and an Enter or Tab suffix, preserving GS1 FNC1/group separators (ASCII29 / Ctrl+]). The app does not intercept typing in other controls or program the scanner.
+
+The user's Newland is instead shown as USB CDC on COM7. `src/serial-scanner.js` provides a separate, explicit Web Serial chooser and read-only stream transport. Cancel, page exit and component cleanup release the browser's port. The parent retains the picker across modal closes while a serial session is active. This cannot override Proscript's COM-port ownership or reconnect Proscript automatically. No driver settings, device configuration commands or serial writes are used. See `docs/serial-scanner.md` for connection prerequisites, framing and physical-test limitations.
 
 `src/barcode.js` validates EAN/UPC/GTIN and decodes GS1 AI01/02,17,10,21 and37. Expiry YY uses the year within the current year minus50 through plus49; DD00 is the final day of the month. Variable data is never split by guessing a hidden application identifier; missing separators leave expiry unknown and may raise a review warning. AI02 container codes require explicit pack confirmation and never infer pack count.
 

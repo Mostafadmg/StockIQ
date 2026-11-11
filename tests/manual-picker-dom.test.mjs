@@ -5,7 +5,7 @@ import {mountManualSearch} from '../src/manual-search.js';
 
 const pack={id:'1477411000001105',type:'AMPP',name:'Amoxicillin 500mg capsules',pack:'100 capsule',source:'NHS dm+d'};
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-function setup({record=pack,packError=false,onQuote,onCompare,request:requestOverride,onAdd=async()=>({}),onSend=async()=>({order:{id:'TEST-2000',status:'Awaiting',supplier:'AAH',items:[{quantity:1}],total:1},simulated:true})}={}){
+function setup({record=pack,packError=false,onQuote,onCompare,onClose,serial,request:requestOverride,onAdd=async()=>({}),onSend=async()=>({order:{id:'TEST-2000',status:'Awaiting',supplier:'AAH',items:[{quantity:1}],total:1},simulated:true})}={}){
  const {document,window}=parseHTML('<!doctype html><html><body><div id="app"><div id="host"></div></div></body></html>');
  // Linkedom omits selection setters and focus state; supply browser-like behavior
  // without replacing application event listeners or component code.
@@ -14,7 +14,7 @@ function setup({record=pack,packError=false,onQuote,onCompare,request:requestOve
  let focused=document.body;Object.defineProperty(document,'activeElement',{configurable:true,get:()=>focused});
  window.HTMLElement.prototype.focus=function(){focused=this;this.dispatchEvent(new window.Event('focus'));};
  const request=async(...args)=>requestOverride?requestOverride(...args):args[0].startsWith('/api/dmd/packs')?{ok:!packError,error:packError?'Pack service unavailable':undefined,data:{packs:[pack]}}:{ok:true,data:{matches:[record],releaseDate:'2026-11-09'}};
- const cleanup=mountManualSearch({host:document.querySelector('#host'),request,onAdd,onSend,onQuote,onCompare});
+ const cleanup=mountManualSearch({host:document.querySelector('#host'),request,onAdd,onSend,onQuote,onCompare,onClose,serial});
  const emit=(target,type,properties={})=>{const event=new window.Event(type,{bubbles:true,cancelable:true});for(const [name,value] of Object.entries(properties))Object.defineProperty(event,name,{value});target.dispatchEvent(event);return event;};
  return {document,window,cleanup,emit,setFocused:element=>focused=element,input:document.querySelector('.dmd-query')};
 }
@@ -56,6 +56,55 @@ test('partial and unavailable responses report actual accepted packs and only re
 
 const barcodePack={id:'1327911000001107',type:'AMPP',name:'Verapamil 160mg tablets',pack:'56 tablet',source:'NHS dm+d'};
 const barcodeResponse=(extra={})=>({ok:true,data:{gtin:'05037563003235',format:'gs1',batch:'LOT-5',expiry:'2025-01-31',expiryRaw:'250131',warnings:[],source:'NHS dm+d',matches:[barcodePack],...extra}});
+
+function serialFixture({openError}={}){
+ let streamController,requests=0,closed=0,opened;
+ const readable=new ReadableStream({start(controller){streamController=controller;}});
+ const port={readable,async open(options){opened=options;if(openError)throw openError;},async close(){closed++;}};
+ return {serial:{requestPort(){requests++;return Promise.resolve(port);}},push:text=>streamController.enqueue(new TextEncoder().encode(text)),get requests(){return requests;},get closed(){return closed;},get opened(){return opened;}};
+}
+
+test('USB CDC serial scanning opens the existing review modal and Cancel releases its port without ordering',async()=>{
+ const device=serialFixture(),lookups=[];let mutations=0;const c=setup({serial:device.serial,request:async(path,method,data)=>{lookups.push({path,method,data});return barcodeResponse();},onAdd:async()=>mutations++,onSend:async()=>mutations++});
+ try{
+  c.document.querySelector('.manual-serial-connect').click();assert.equal(device.requests,1,'The browser chooser starts in the original click stack');await waitFor(()=>device.opened&&c.document.querySelector('.manual-serial-status').textContent.includes('ready'));
+  assert.equal(device.opened.baudRate,9600);assert.equal(c.document.querySelector('.manual-serial-baud').disabled,true);assert.equal(c.cleanup.hasSerialSession(),true);
+  device.push(']d201050375630032351725013110LOT-5\u001d');device.push('21PRIVATE-SERIAL\r\n');await waitFor(()=>c.document.querySelector('[role="dialog"]'));
+  assert.equal(lookups.length,1);assert.equal(lookups[0].path,'/api/dmd/barcode');assert.ok(lookups[0].data.barcode.includes('\u001d'));assert.equal(mutations,0);assert.doesNotMatch(c.document.body.textContent,/PRIVATE-SERIAL/);
+  const release=c.document.querySelector('.manual-serial-release');assert.equal(release.hidden,false);release.click();await waitFor(()=>device.closed===1);assert.ok(c.document.querySelector('[role="dialog"]'),'Releasing hardware preserves the review modal');assert.equal(c.cleanup.hasSerialSession(),false);assert.match(c.document.querySelector('.manual-serial-modal-status').textContent,/Proscript may need/);assert.equal(mutations,0);
+ }finally{c.cleanup();}
+});
+
+test('serial session remains ready after closing a review and drops input received while that review is open',async()=>{
+ const device=serialFixture(),closes=[];let lookups=0;const c=setup({serial:device.serial,onClose:options=>closes.push(options),request:async()=>{lookups++;return barcodeResponse();}});
+ try{
+  c.document.querySelector('.manual-serial-connect').click();await waitFor(()=>device.opened);device.push('5037563003235\r');await waitFor(()=>c.document.querySelector('[role="dialog"]'));
+  device.push('IGNORED-PARTIAL');await pause(15);c.document.querySelector('.manual-order-close').click();assert.deepEqual(closes,[{serialActive:true}]);assert.equal(device.closed,0);assert.equal(c.cleanup.hasSerialSession(),true);
+  device.push('5037563003235\r');await pause(20);assert.equal(lookups,1,'A checksum-valid suffix of the ignored scan stays discarded until its terminator');assert.equal(c.document.querySelector('[role="dialog"]'),null);
+  device.push('5037563003235\r');await waitFor(()=>lookups===2);assert.ok(c.document.querySelector('[role="dialog"]'));assert.equal(lookups,2);c.cleanup();await waitFor(()=>device.closed===1);assert.equal(c.document.querySelector('[role="dialog"]'),null);
+ }finally{c.cleanup();}
+});
+
+test('serial data without a suffix waits for Find pack and never displays the raw serial payload',async()=>{
+ const device=serialFixture();let scanned;const c=setup({serial:device.serial,request:async(path,method,data)=>{scanned=data.barcode;return barcodeResponse();}});
+ try{
+  c.document.querySelector('.manual-serial-connect').click();await waitFor(()=>device.opened);device.push('01050375630032351725013110LOT-5\u001d21PRIVATE-SERIAL');await waitFor(()=>c.document.querySelector('.manual-scan-status').textContent.includes('Receiving'));
+  assert.equal(scanned,undefined);assert.equal(c.document.querySelector('.manual-scan-input').value,'');assert.doesNotMatch(c.document.body.textContent,/PRIVATE-SERIAL/);c.document.querySelector('.manual-scan-lookup').click();await waitFor(()=>c.document.querySelector('[role="dialog"]'));assert.equal(scanned,'01050375630032351725013110LOT-5\u001d21PRIVATE-SERIAL');
+ }finally{c.cleanup();}
+});
+
+test('cancelling serial lookup prevents a late response from opening a modal and busy ports retain keyboard scanning',async()=>{
+ const device=serialFixture();let resolveLookup;const c=setup({serial:device.serial,request:()=>new Promise(resolve=>resolveLookup=resolve)});
+ try{
+  c.document.querySelector('.manual-serial-connect').click();await waitFor(()=>device.opened);device.push('5037563003235\r');await waitFor(()=>resolveLookup);c.document.querySelector('.manual-serial-cancel').click();await waitFor(()=>device.closed===1);resolveLookup(barcodeResponse());await pause(15);assert.equal(c.document.querySelector('[role="dialog"]'),null);assert.equal(c.document.querySelector('.manual-scan-input').readOnly,false);
+ }finally{c.cleanup();}
+ const busy=serialFixture({openError:Object.assign(new Error('private operating system message'),{name:'NetworkError'})}),d=setup({serial:busy.serial});
+ try{d.document.querySelector('.manual-serial-connect').click();await waitFor(()=>d.document.querySelector('.manual-serial-status').classList.contains('is-error'));assert.match(d.document.querySelector('.manual-serial-status').textContent,/ProScript or another application/);assert.doesNotMatch(d.document.body.textContent,/private operating system message/);assert.equal(d.document.querySelector('.manual-scan-focus').disabled,false);assert.equal(d.document.querySelector('.manual-serial-connect').disabled,false);}finally{d.cleanup();}
+});
+
+test('unsupported serial browsers explain desktop access while keyboard barcode entry remains available',()=>{
+ const c=setup({serial:{}});try{assert.equal(c.document.querySelector('.manual-serial-connect').disabled,true);assert.match(c.document.querySelector('.manual-serial-status').textContent,/desktop Chrome or Edge/);assert.match(c.document.querySelector('.manual-serial-status').textContent,/directly/);assert.equal(c.document.querySelector('.manual-scan-focus').disabled,false);assert.equal(c.document.querySelector('.manual-serial-cancel').hidden,true);}finally{c.cleanup();}
+});
 
 test('scanner Enter and Tab identify an exact pack once and never add or send it automatically',async()=>{
  for(const suffix of ['Enter','Tab']){let lookups=0,mutations=0;const c=setup({request:async(path,method,data)=>{assert.equal(path,'/api/dmd/barcode');assert.equal(method,'POST');assert.equal(data.barcode,'5037563003235');lookups++;return barcodeResponse({serial:'DO-NOT-DISPLAY'});},onAdd:async()=>mutations++,onSend:async()=>mutations++});

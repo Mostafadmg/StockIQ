@@ -4,6 +4,17 @@ import {parseHTML} from 'linkedom';
 import {handleApi} from '../server/api.mjs';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check){for(let i=0;i<100;i++){if(check())return;await sleep(20);}throw new Error('Expected UI did not appear.');}
+function mockSerialDevices(){
+ const serial=new EventTarget(),ports=[];let requests=0;
+ serial.requestPort=async()=>{
+  requests++;
+  const port=new EventTarget();port.opened=false;port.closed=0;port.cancelled=0;port.readable=null;
+  port.open=async()=>{port.opened=true;port.readable=new ReadableStream({start(controller){port.controller=controller;},cancel(){port.cancelled++;}});};
+  port.close=async()=>{assert.equal(port.readable?.locked,false,'Release the stream lock before closing the device');port.closed++;port.readable=null;};
+  ports.push(port);return port;
+ };
+ return {serial,ports,get requests(){return requests;}};
+}
 test('the mounted app opens a medicine result in the manual-order modal and keeps it mounted',async()=>{
  const {window}=parseHTML('<html><body><div id="app"></div><div id="toast"></div><div id="overlay"></div></body></html>');
  Object.defineProperty(window.HTMLOptionElement.prototype,'selected',{configurable:true,get(){return this.hasAttribute('selected');},set(value){this.toggleAttribute('selected',!!value);}});
@@ -11,6 +22,7 @@ test('the mounted app opens a medicine result in the manual-order modal and keep
  const doc=window.document,storage=new Map(),url=new URL('https://stockiq-ui.test/daily-orders');
  globalThis.window=window;globalThis.document=doc;globalThis.location=url;globalThis.history={pushState(_s,_t,path){url.href=new URL(path,url).href;},replaceState(_s,_t,path){url.href=new URL(path,url).href;}};
  globalThis.localStorage={getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,String(value))};globalThis.CSS={escape:value=>String(value)};window.scrollTo=()=>{};
+ const serialDevices=mockSerialDevices(),originalNavigator=Object.getOwnPropertyDescriptor(globalThis,'navigator');Object.defineProperty(globalThis,'navigator',{configurable:true,value:{serial:serialDevices.serial}});
  const originalFetch=globalThis.fetch,originalInterval=globalThis.setInterval;globalThis.setInterval=(...args)=>{const timer=originalInterval(...args);timer.unref();return timer;};
  globalThis.fetch=(path,options={})=>handleApi(new Request(new URL(path,url),options));
  try{
@@ -53,5 +65,29 @@ test('the mounted app opens a medicine result in the manual-order modal and keep
   workspaceQuantity.value='4';workspaceCard.querySelector('[data-action="choose-manual-product"]').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>doc.querySelector('.manual-order-form'));assert.equal(doc.querySelector('[name="quantity"]').value,'4','The original card still opens the ordering modal with its own quantity');doc.querySelector('.manual-order-close').dispatchEvent(new window.Event('click',{bubbles:true}));
   const refreshedCard=doc.querySelector('.workspace-product-entry');refreshedCard.querySelector('[data-manual-quantity]').value='3';const workspaceButton=refreshedCard.querySelector('[data-action="quick-add-manual-product"]');workspaceButton.dispatchEvent(new window.Event('click',{bubbles:true}));workspaceButton.dispatchEvent(new window.Event('click',{bubbles:true}));
   await until(()=>JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace.basket.some(line=>line.id===workspaceId&&line.quantity===3));const afterQuickAdd=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace;assert.equal(afterQuickAdd.orders.length,received.orders.length,'Quick add never submits an order');assert.equal(afterQuickAdd.basket.find(line=>line.id===addedId).quantity,2,'Separate row quantities are preserved');assert.equal(doc.querySelector('[role="dialog"]'),null);assert.equal(doc.querySelector('.continue-button').disabled,false);
- }finally{globalThis.fetch=originalFetch;globalThis.setInterval=originalInterval;}
+  // A CDC scanner stays owned by this page between item modals, until Cancel or navigation.
+  const beforeSerial=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace;
+  const serialInput=doc.querySelector('.manual-scan-input');
+  doc.querySelector('.manual-serial-connect').dispatchEvent(new window.Event('click',{bubbles:true}));
+  assert.equal(serialDevices.requests,1,'Request a port directly from the explicit Connect click');
+  await until(()=>serialDevices.ports[0]?.opened&&serialDevices.ports[0]?.readable?.locked);
+  const port=serialDevices.ports[0],encoder=new TextEncoder();
+  const code=']d201050375630032351727123110SERIAL-BATCH'+String.fromCharCode(29)+'21PRIVATE-SERIAL-APP';
+  port.controller.enqueue(encoder.encode(code.slice(0,25)));port.controller.enqueue(encoder.encode(code.slice(25)+'\r\n'));
+  await until(()=>doc.querySelector('.manual-scan-summary')&&doc.querySelectorAll('.manual-comparison-row').length===7);
+  assert.match(doc.querySelector('[role="dialog"]').textContent,/Verapamil 160mg/);assert.match(doc.querySelector('.manual-scan-summary').textContent,/SERIAL-BATCH/);
+  const afterSerial=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace;
+  assert.deepEqual(afterSerial.basket,beforeSerial.basket,'Receiving a serial frame never adds to the basket');assert.equal(afterSerial.orders.length,beforeSerial.orders.length,'Receiving a serial frame never sends an order');
+  assert.equal(JSON.stringify(afterSerial).includes('PRIVATE-SERIAL-APP'),false);assert.equal(doc.body.textContent.includes('PRIVATE-SERIAL-APP'),false);
+  doc.querySelector('.manual-order-close').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>!doc.querySelector('[role="dialog"]'));
+  assert.equal(doc.querySelector('.manual-scan-input'),serialInput,'Closing an item modal retains the active serial picker');assert.equal(port.closed,0,'The active session is not released between packs');
+  port.controller.enqueue(encoder.encode('5037563003235\r\n'));
+  await until(()=>doc.querySelector('.manual-scan-summary'));assert.match(doc.querySelector('[role="dialog"]').textContent,/Verapamil 160mg/);
+  doc.querySelector('.manual-serial-release').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>port.closed===1);
+  assert.ok(doc.querySelector('[role="dialog"]'),'Cancel scanner releases the device without dismissing the item');assert.equal(port.cancelled,1);
+  doc.querySelector('.manual-order-close').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>!doc.querySelector('[role="dialog"]'));
+  doc.querySelector('.manual-serial-connect').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>serialDevices.ports[1]?.readable?.locked);
+  doc.querySelector('[data-nav="history"]').dispatchEvent(new window.Event('click',{bubbles:true}));await until(()=>serialDevices.ports[1].closed===1);
+  assert.equal(serialDevices.ports[1].cancelled,1,'Leaving Manual Orders releases the serial reader');assert.equal(doc.querySelector('.manual-serial-connect'),null);
+ }finally{globalThis.fetch=originalFetch;globalThis.setInterval=originalInterval;if(originalNavigator)Object.defineProperty(globalThis,'navigator',originalNavigator);else delete globalThis.navigator;}
 });

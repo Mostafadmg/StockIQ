@@ -103,4 +103,6 @@ Order results show the supplying test wholesaler, supplier reference, requested/
 
 Manual Orders also supports a connected USB keyboard scanner. Click **Ready to scan**, scan the pack, and finish with Enter or Tab. Valid EAN/UPC and GS1 DataMatrix codes identify the exact dm+d AMPP using the NHS GTIN index. GS1 batch and expiry are shown when encoded; a linear barcode has neither. A unique current pack opens the order modal, while historical/container/ambiguous matches need confirmation. Scanning never submits an order.
 
+For the photographed Newland USB CDC scanner on COM7, use **Connect serial scanner** in desktop Chrome or Edge instead. Proscript must release the port first. **Cancel scanner** closes the browser connection; Proscript may need to reconnect afterwards. No Windows priority setting or automatic Proscript handover is provided. See [scanner setup and limits](docs/serial-scanner.md).
+
 Supplier comparison reports the lowest test total for the full pack quantity and breaks price ties using the earliest known delivery estimate. Current supplier prices may all tie; reference/list prices from dm+d remain separate from simulated supplier costs.
