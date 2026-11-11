@@ -79,3 +79,46 @@ test('invalid preview/scenario/supplier input fails atomically; legacy orders ge
  const legacy=seedWorkspace();for(const order of legacy.orders){delete order.fulfilment;for(const item of order.items){delete item.requestedQuantity;delete item.acceptedQuantity;delete item.outstandingQuantity;}}
  const upgraded=await client().init(legacy);assert.equal(upgraded.status,201);assert.ok(upgraded.workspace.orders.every(o=>o.fulfilment.status==='accepted'&&o.items.every(i=>i.acceptedQuantity===i.quantity)));
 });
+
+test('optional depot follows the chosen delivery run while old estimates keep their exact shape',()=>{
+ const old=nextDeliveryEstimate('AAH',vans,'2026-11-11T10:00:00Z');assert.equal(Object.hasOwn(old,'depot'),false);
+ const routed={AAH:[{...vans.AAH[0],id:'later',offset:2,depot:' Birmingham '},{...vans.AAH[0],id:'earlier',depot:'Cardiff'}]};
+ const earlier=nextDeliveryEstimate('AAH',routed,'2026-11-11T10:00:00Z');assert.equal(earlier.scheduleId,'earlier');assert.equal(earlier.depot,'Cardiff');assert.equal(earlier.workingDays,1);
+ routed.AAH.pop();const birmingham=nextDeliveryEstimate('AAH',routed,'2026-11-11T10:00:00Z');assert.equal(birmingham.depot,'Birmingham');assert.equal(birmingham.workingDays,2);assert.equal(birmingham.estimatedArrivalAt,'2026-11-13T09:00:00.000Z');
+ const blank=nextDeliveryEstimate('AAH',{AAH:[{...vans.AAH[0],depot:'   '}]},'2026-11-11T10:00:00Z');assert.equal(Object.hasOwn(blank,'depot'),false);
+ const none=nextDeliveryEstimate('AAH',{AAH:[{...vans.AAH[0],days:[],depot:'Birmingham'}]},'2026-11-11T10:00:00Z');assert.equal(none.estimatedArrivalAt,null);assert.equal(Object.hasOwn(none,'depot'),false);
+});
+
+test('configured depot flows through read-only quotes, comparisons, submissions and historical restoration',async()=>{
+ const c=client();await c.init();const route={id:'birmingham',days:[1,2,3,4,5,6,7],cutoff:'23:59',arrival:'09:00',offset:2,depot:' Birmingham '};
+ const saved=await c.request('PUT','/api/delivery-vans/AAH',{vans:[route]});assert.equal(saved.status,200);assert.equal(saved.data.vans[0].depot,'Birmingham');
+ await c.request('POST','/api/basket',{productId:'p001',quantity:2,supplier:'AAH'});const before=structuredClone(c.workspace);
+ const quote=await c.request('POST','/api/orders/quote',{productId:'p001',quantity:2,supplier:'AAH'});assert.equal(quote.data.delivery.depot,'Birmingham');assert.equal(quote.data.delivery.workingDays,2);assert.deepEqual(quote.workspace,before);
+ const comparison=await c.request('POST','/api/orders/compare',{productId:'p001',quantity:2});assert.equal(comparison.data.quotes.find(item=>item.supplier==='AAH').delivery.depot,'Birmingham');assert.deepEqual(comparison.workspace,before);
+ const preview=await c.request('POST','/api/basket/cascade',{});assert.equal(preview.data.lines[0].quotes.find(item=>item.supplier==='AAH').delivery.depot,'Birmingham');assert.deepEqual(preview.workspace,before);
+ const body=payload(),direct=await c.request('POST','/api/orders/direct',body);assert.equal(direct.status,201);assert.equal(direct.data.order.fulfilment.delivery.depot,'Birmingham');
+ const cascade=await c.request('POST','/api/orders/cascade',{allocations:[{productId:'p001',supplier:'AAH'}]});assert.equal(cascade.status,201);assert.equal(cascade.data.orders[0].fulfilment.delivery.depot,'Birmingham');
+ await c.request('PUT','/api/delivery-vans/AAH',{vans:[{...route,depot:'Cardiff',offset:1}]});
+ const restored=await dispatch(c.workspace,'GET','/api/orders');assert.equal(restored.status,200);assert.equal(restored.workspace.features.deliveryVans.AAH[0].depot,'Cardiff');
+ for(const original of [direct.data.order,cascade.data.orders[0]])assert.deepEqual(restored.data.find(order=>order.id===original.id).fulfilment,original.fulfilment);
+ const replay=await dispatch(restored.workspace,'POST','/api/orders/direct',body);assert.equal(replay.status,200);assert.equal(replay.data.replayed,true);assert.deepEqual(replay.data.order.fulfilment,direct.data.order.fulfilment);
+ const next=await dispatch(replay.workspace,'POST','/api/orders/direct',payload());assert.equal(next.status,201);assert.equal(next.data.order.fulfilment.delivery.depot,'Cardiff');
+});
+
+test('depots are omitted for unavailable or undated deliveries and invalid route data is rejected atomically',async()=>{
+ const c=client();await c.init();const route={...vans.AAH[0],depot:'Birmingham'},saved=await c.request('PUT','/api/delivery-vans/AAH',{vans:[route]});assert.equal(saved.status,200);
+ const unavailable=await c.request('POST','/api/orders/quote',{productId:'p001',quantity:2,supplier:'AAH',scenario:'unavailable'});assert.equal(unavailable.data.delivery.estimatedArrivalAt,null);assert.equal(Object.hasOwn(unavailable.data.delivery,'depot'),false);
+ const before=structuredClone(c.workspace);
+ for(const depot of [null,5,{},[],true,'x'.repeat(81)]){assert.equal((await c.request('PUT','/api/delivery-vans/AAH',{vans:[{...route,depot}]})).status,400);assert.deepEqual(c.workspace,before);}
+ assert.equal((await c.request('PUT','/api/delivery-vans/AAH',{vans:[{...route,depotCode:'BHM'}]})).status,400);assert.deepEqual(c.workspace,before);
+ const blank=await c.request('PUT','/api/delivery-vans/AAH',{vans:[{...route,depot:'   '}]});assert.equal(blank.status,200);assert.equal(Object.hasOwn(blank.data.vans[0],'depot'),false);
+ const noRun=await c.request('PUT','/api/delivery-vans/AAH',{vans:[{...route,days:[]}]});assert.equal(noRun.status,200);const quote=await c.request('POST','/api/orders/quote',{productId:'p001',quantity:2,supplier:'AAH'});assert.equal(quote.data.delivery.estimatedArrivalAt,null);assert.equal(Object.hasOwn(quote.data.delivery,'depot'),false);
+});
+
+test('historical depot validation is bounded and old snapshots do not acquire a depot during restore',async()=>{
+ const c=client();await c.init();const original=await c.request('POST','/api/orders/direct',payload());assert.equal(Object.hasOwn(original.data.order.fulfilment.delivery,'depot'),false);
+ const old=await dispatch(c.workspace,'GET','/api/orders');assert.deepEqual(old.data.find(order=>order.id===original.data.order.id).fulfilment,original.data.order.fulfilment);
+ for(const depot of [null,42,'','   ',' Birmingham ','x'.repeat(81)]){const invalid=structuredClone(c.workspace);invalid.orders[0].fulfilment.delivery.depot=depot;assert.equal((await client().init(invalid)).status,400);}
+ const unknown=structuredClone(c.workspace);unknown.orders[0].fulfilment.delivery.depotCode='BHM';assert.equal((await client().init(unknown)).status,400);
+ const unavailable=await c.request('POST','/api/orders/direct',payload({scenario:'unavailable'}));const badUnavailable=structuredClone(unavailable.workspace);badUnavailable.orders[0].fulfilment.delivery.depot='Birmingham';assert.equal((await client().init(badUnavailable)).status,400);
+});

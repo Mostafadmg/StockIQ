@@ -13,6 +13,7 @@ test('built Worker serves the app shell and every linked first-party asset',asyn
   const script=await fetchDraft('/app.js');assert.match(script.headers.get('content-type'),/javascript/);const source=await script.text();
   for(const title of ['Auto Orders','Manual Orders','Goods In','History','Advanced','Tools'])assert.ok(source.includes(title),`Main shell includes ${title}`);
   const views=await fetchDraft('/views.js');assert.equal(views.status,200);assert.match(views.headers.get('content-type'),/javascript/);assert.match(await views.text(),/export function renderView/);
+  const delivery=await fetchDraft('/delivery-status.js');assert.equal(delivery.status,200);assert.match(delivery.headers.get('content-type'),/javascript/);assert.match(await delivery.text(),/export function deliveryStatus/);
   const review=await fetchDraft('/basket-review.js');assert.equal(review.status,200);assert.match(review.headers.get('content-type'),/javascript/);assert.match(await review.text(),/export function renderBasketReview/);assert.ok(assets.includes('/basket-review.css'));
 });
 test('deep links serve the same shell; missing assets remain 404 and HEAD omits bodies',async()=>{

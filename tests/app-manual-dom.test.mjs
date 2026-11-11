@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseHTML} from 'linkedom';
-import {handleApi} from '../server/api.mjs';
+import {handleApi,seedWorkspace} from '../server/api.mjs';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check){for(let i=0;i<100;i++){if(check())return;await sleep(20);}throw new Error('Expected UI did not appear.');}
 test('the mounted app opens a medicine result in the manual-order modal and keeps it mounted',async()=>{
@@ -9,6 +9,7 @@ test('the mounted app opens a medicine result in the manual-order modal and keep
  Object.defineProperty(window.HTMLOptionElement.prototype,'selected',{configurable:true,get(){return this.hasAttribute('selected');},set(value){this.toggleAttribute('selected',!!value);}});
  Object.defineProperty(window.HTMLSelectElement.prototype,'value',{configurable:true,get(){const options=[...this.querySelectorAll('option')];const option=options.find(o=>o.selected||o.hasAttribute('selected'))||options[0];return option?.getAttribute('value')??option?.textContent??'';},set(value){for(const option of this.querySelectorAll('option')){option.selected=option.getAttribute('value')===String(value)||(!option.hasAttribute('value')&&option.textContent===String(value));option.toggleAttribute('selected',option.selected);}}});
  const doc=window.document,storage=new Map(),url=new URL('https://stockiq-ui.test/daily-orders');
+ const seeded=seedWorkspace();seeded.features.deliveryVans.AAH=[{id:'aah-birmingham-test',days:[1,2,3,4,5],cutoff:'23:59',arrival:'09:00',offset:2,depot:'Birmingham'}];storage.set('stockiq.test-workspace.v1',JSON.stringify({id:'manual-dom-'+crypto.randomUUID(),workspace:seeded}));
  let focused=doc.body;Object.defineProperty(doc,'activeElement',{configurable:true,get:()=>focused});window.HTMLElement.prototype.focus=function(){focused=this;this.dispatchEvent(new window.Event('focus'));};
  const emit=(target,type,properties={})=>{const event=new window.Event(type,{bubbles:true,cancelable:true});for(const [key,value] of Object.entries(properties))Object.defineProperty(event,key,{value});target.dispatchEvent(event);return event;};
  globalThis.window=window;globalThis.document=doc;globalThis.location=url;globalThis.history={pushState(_s,_t,path){url.href=new URL(path,url).href;},replaceState(_s,_t,path){url.href=new URL(path,url).href;}};
@@ -25,14 +26,17 @@ test('the mounted app opens a medicine result in the manual-order modal and keep
   await until(()=>doc.querySelector('.manual-order-quote-details')&&!doc.querySelector('.manual-order-send').disabled);
   const quoted=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace,quotedPack=quoted.products.find(product=>product.catalogueId);
   assert.ok(quotedPack,'A real NHS medicine was resolved for its supplier quote');assert.equal(doc.querySelector(`#manual-order-items [data-action="choose-manual-product"][data-id="${quotedPack.id}"]`),null,'Looking up a quote does not add the medicine to the order list');
+  const aahComparison=()=>[...doc.querySelectorAll('.manual-comparison-row')].find(row=>row.querySelector('.manual-comparison-supplier>strong')?.textContent==='AAH');
+  await until(()=>aahComparison()?.querySelector('.delivery-status.is-yellow'));assert.match(aahComparison().querySelector('.delivery-status.is-yellow').textContent,/Birmingham/);assert.equal(quoted.orders.length,initial.orders.length,'Comparing deliveries and obtaining a quote never sends an order');
+  const supplier=dialog.querySelector('[name="supplier"]');supplier.value='AAH';emit(supplier,'change');await until(()=>doc.querySelector('.manual-order-quote .delivery-status.is-yellow')&&!doc.querySelector('.manual-order-send').disabled);assert.match(doc.querySelector('.manual-order-quote .delivery-status.is-yellow').textContent,/Birmingham/);assert.match(doc.querySelector('.manual-order-quote').textContent,/Coming fromAAH.*Birmingham/);
   const quantity=dialog.querySelector('[name="quantity"]');quantity.value='3';quantity.dispatchEvent(new window.Event('input',{bubbles:true}));
   const scenario=dialog.querySelector('[name="scenario"]');scenario.value='partial';scenario.dispatchEvent(new window.Event('change',{bubbles:true}));
   await until(()=>doc.querySelector('.manual-order-quote-status.is-partial')&&!doc.querySelector('.manual-order-send').disabled);
   dialog.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
   await until(()=>doc.querySelector('.manual-order-result.is-partial'));
   const result=doc.querySelector('.manual-order-result');assert.match(result.textContent,/Requested3 packsAccepted2 packsUnavailable1 packs/);assert.match(result.textContent,/SIM-/);assert.match(result.textContent,/Estimated arrival/);assert.match(result.textContent,/Try remaining packs/);
-  const workspace=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace,sent=workspace.orders[0];
-  const liveOrderRow=doc.querySelector(`#manual-order-items [data-manual-order="${sent.id}"]`);assert.ok(liveOrderRow,'Sending updates the list below search while the result modal is still open');assert.match(liveOrderRow.querySelector('.manual-item-quantity').textContent,/2 packs/);assert.match(liveOrderRow.textContent,/2 of 3 accepted/);assert.equal(doc.querySelector('.dmd-query'),input,'Updating the order list preserves the mounted picker');
+  const workspace=JSON.parse(storage.get('stockiq.test-workspace.v1')).workspace,sent=workspace.orders[0];assert.equal(sent.supplier,'AAH');assert.equal(sent.fulfilment.delivery.depot,'Birmingham');assert.ok(sent.fulfilment.delivery.workingDays>=2);assert.match(result.querySelector('.delivery-status.is-yellow').textContent,/Birmingham/);
+  const liveOrderRow=doc.querySelector(`#manual-order-items [data-manual-order="${sent.id}"]`);assert.ok(liveOrderRow,'Sending updates the list below search while the result modal is still open');assert.match(liveOrderRow.querySelector('.manual-item-quantity').textContent,/2 packs/);assert.match(liveOrderRow.textContent,/2 of 3 accepted/);assert.equal(liveOrderRow.querySelector('.manual-item-depot')?.textContent,'Birmingham','The order row uses its saved structured dispatch depot');assert.equal(doc.querySelector('.dmd-query'),input,'Updating the order list preserves the mounted picker');
   doc.querySelector('.manual-order-close').dispatchEvent(new window.Event('click',{bubbles:true}));await sleep(10);assert.equal(doc.querySelector('[role="dialog"]'),null);assert.ok(doc.querySelector('.dmd-query'));assert.ok(doc.querySelector(`#manual-order-items [data-manual-order="${sent.id}"]`),'The sent medicine remains in the list after closing the modal');
   assert.equal(sent.fulfilment.acceptedQuantity,2);assert.equal(sent.fulfilment.outstandingQuantity,1);assert.equal(workspace.basket.length,0);assert.equal(sent.items[0].received,0);
   const stockBefore=workspace.products.find(p=>p.id===sent.items[0].id).stock;

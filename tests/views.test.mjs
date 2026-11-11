@@ -55,6 +55,21 @@ test('manual basket controls respect busy state and empty submission while messa
  const review=parseHTML(renderManualItems({basket:[item],orders:[]},{tab:'basket',needsReview:true})).document;assert.equal(review.querySelector('[data-action="manual-basket-submit"]').disabled,true);assert.match(review.querySelector('[data-action="manual-basket-restore"]').textContent,/Use saved basket values/);
 });
 
+test('Delivery Times exposes only configured dispatch depots and keeps draft text escaped',async()=>{
+ const {parseHTML}=await import('linkedom'),state=seedWorkspace(),empty=parseHTML(renderView('delivery',{state})).document;
+ assert.ok(empty.querySelectorAll('[data-van-depot]').length>0);for(const field of empty.querySelectorAll('[data-van-depot]'))assert.equal(field.value,'','No supplier implies a depot location');
+ const draft={id:'draft-van',days:[1,2,3,4,5],cutoff:'17:00',arrival:'09:00',offset:2,depot:'Birmingham & <branch>'},document=parseHTML(renderView('delivery',{state,ui:{vanDrafts:{AAH:[draft]}}})).document,field=document.querySelector('[data-van-id="draft-van"] [data-van-depot]');
+ assert.equal(field.value,draft.depot);assert.equal(field.getAttribute('maxlength'),'80');assert.equal(document.querySelector('branch'),null);assert.equal(field.getAttribute('placeholder'),'e.g. Birmingham');
+});
+
+test('ordered items show the saved dispatch depot without adding it to rejected or unconfirmed lines',async()=>{
+ const {parseHTML}=await import('linkedom'),item={...seedWorkspace().products[0],quantity:3,requestedQuantity:3,acceptedQuantity:2,received:0},order={id:'TEST-2401',supplier:'AAH',status:'Awaiting',createdAt:'2026-11-11T10:00:00Z',items:[item],fulfilment:{status:'partial',delivery:{estimatedArrivalAt:'2026-11-13T09:00:00Z',workingDays:2,depot:'Birmingham <depot>'}}},state={basket:[],orders:[order]};
+ const ordered=parseHTML(renderManualItems(state)).document,rejected=parseHTML(renderManualItems(state,{tab:'rejected'})).document;
+ assert.equal(ordered.querySelector('.manual-item-depot').textContent,'Birmingham <depot>');assert.equal(ordered.querySelector('depot'),null);assert.equal(rejected.querySelector('.manual-item-depot'),null);assert.doesNotMatch(rejected.querySelector('.manual-item-status').textContent,/Est /);
+ const pendingItem={...item};delete pendingItem.acceptedQuantity;state.orders=[{...order,status:'Pending',items:[pendingItem],fulfilment:{delivery:order.fulfilment.delivery}}];
+ const pending=parseHTML(renderManualItems(state)).document;assert.equal(pending.querySelector('.manual-item-depot'),null);assert.match(pending.querySelector('.manual-item-status').textContent,/Awaiting supplier response/);
+});
+
 
 test('every rendered action has an implemented core or feature handler',async()=>{const {parityActions}=await import('../src/parity-actions.js');const {readFile}=await import('node:fs/promises');const app=await readFile(new URL('../src/app.js',import.meta.url),'utf8');const supported=new Set([...parityActions,...[...app.matchAll(/name===['"]([^'"]+)['"]/g)].map(m=>m[1])]);const state=seedWorkspace();state.features.surplus.offers=[{id:'OFFER-1001',productId:'p009',quantity:2,available:1,unitPrice:.34,status:'active',createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+86400000).toISOString()}];state.features.surplus.transfers=[{id:'TRANSFER-1001',offerId:'OFFER-1001',productId:'p009',quantity:1,unitPrice:.34,total:.34,branch:'Demo branch',status:'Requested',createdAt:new Date().toISOString()}];const subviews={goods:['deliveries','claims','analytics','settings'],surplus:['offers','sent','statement','past'],analytics:['overview','regret','waste','prices','slow','performance'],stock:['overview','to-count','count-history','count']};for(const view of all){for(const subtab of subviews[view]||['']){const html=renderView(view,{state,subtab});for(const match of html.matchAll(/data-action="([^"]+)"/g))assert.ok(supported.has(match[1]),view+'/'+subtab+': '+match[1]);}}});
 

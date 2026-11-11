@@ -9,6 +9,19 @@
 .manual-comparison-heading .manual-comparison-note { flex-basis:100%; margin:0; }
 .manual-comparison-recommendation { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px 12px; margin:0 0 10px; padding:12px; border:1px solid var(--line); border-radius:var(--radius-ui); background:var(--shade); }
 .manual-comparison-recommendation>p { flex:1 1 180px; min-width:0; margin:0; color:var(--ink); font-size:12px; line-height:1.65; }
+.manual-comparison-recommendation-description { flex:1 1 220px; min-width:0; }
+.manual-comparison-recommendation-description>p { margin:0 0 7px; color:var(--ink); font-size:12px; line-height:1.6; }
+.manual-comparison-lowest-summary { flex-basis:100%; }
+.manual-comparison-lowest-summary,.manual-comparison-recommended-summary { display:grid; gap:4px; min-width:0; }
+.manual-comparison-price-line { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:6px 9px; min-width:0; }
+.manual-comparison-price-line>strong { color:var(--ink); font-size:18px; line-height:1.4; font-variant-numeric:tabular-nums; }
+.manual-comparison-price-source,.manual-comparison-price-date { color:var(--muted); font-size:11px; line-height:1.5; }
+.delivery-status { display:inline-flex; align-items:center; gap:5px; width:fit-content; max-width:100%; padding:3px 7px; border:1px solid; border-radius:var(--radius-ui); font-size:11px; font-weight:600; line-height:1.45; text-align:left; overflow-wrap:anywhere; }
+.delivery-status.is-green { color:#166534; background:#dcfce7; border-color:#86efac; }
+.delivery-status.is-yellow { color:#854d0e; background:#fef3c7; border-color:#facc15; }
+.delivery-status.is-neutral { color:#475569; background:#f1f5f9; border-color:#cbd5e1; }
+.delivery-status .delivery-status-estimate { flex:none; color:inherit; font-size:9px; font-weight:650; opacity:.8; }
+.manual-order-delivery>.delivery-status { margin-bottom:3px; }
 .manual-comparison-options>summary { display:list-item; min-height:44px; padding:11px 0; color:var(--purple); cursor:pointer; font-size:12px; font-weight:600; line-height:1.6; }
 .manual-comparison-options[open]>summary { margin-bottom:10px; border-bottom:1px solid var(--line); }
 .manual-comparison-list { display:grid; gap:8px; min-width:0; }
@@ -19,6 +32,8 @@
 .manual-comparison-supplier>strong { color:var(--ink); font-size:13px; line-height:1.5; }
 .manual-comparison-price { text-align:right; font-variant-numeric:tabular-nums; }
 .manual-comparison-price>strong { color:var(--ink); font-size:14px; line-height:1.4; }
+.manual-comparison-price .manual-comparison-price-line { justify-content:flex-end; }
+.manual-comparison-price .manual-comparison-price-line>strong { font-size:14px; }
 .manual-comparison-arrival { color:var(--ink); font-size:12px; line-height:1.5; }
 .manual-comparison-arrival>strong { color:var(--ink); font-size:12px; line-height:1.5; font-weight:550; }
 .manual-comparison-supplier small,.manual-comparison-price small,.manual-comparison-arrival small { color:var(--muted); font-size:11px; line-height:1.5; }
@@ -33,6 +48,9 @@
 .dark .manual-comparison-row.is-recommended { border-color:#7867aa; background:#302b47; }
 .dark .manual-comparison-badge { background:#244238; color:#a8ddc7; }
 .dark .manual-comparison-row.is-recommended .manual-comparison-badge { background:#44385f; color:#ded0ff; }
+.dark .delivery-status.is-green { color:#86efac; background:#16382b; border-color:#326149; }
+.dark .delivery-status.is-yellow { color:#fde68a; background:#40351b; border-color:#80652a; }
+.dark .delivery-status.is-neutral { color:#cbd5e1; background:#29313c; border-color:#4b5563; }
 
 @media(max-width:640px) {
   .manual-order-comparison { padding:12px; }

@@ -75,6 +75,8 @@
 #main-content .stock-metric>strong { color:#1f2937; font-size:28px; font-weight:700; line-height:36px; }
 #main-content .stock-metric>small { color:#94a3b8; font-size:12px; }
 #main-content .van-card { border-radius:12px; }
+#main-content .stock-page-delivery .van-times .van-depot-field { display:flex; align-items:center; gap:8px; flex:1 1 180px; min-width:0; }
+#main-content .stock-page-delivery .van-times .van-depot-field input { width:100%; max-width:220px; min-width:0; }
 #main-content .van-days span { border-radius:6px; }
 #main-content .surplus-intro { background:#f8fafc; border-color:#e2e8f0; border-radius:12px; }
 #main-content .screenshot-import .upload-area { border-color:#cbd5e1; border-radius:12px; background:#f8fafc; }
@@ -353,6 +355,7 @@
 #main-content .stock-page-manual .manual-basket-footer p>span { display:block; margin-top:3px; color:var(--muted); font-size:11px; }
 #main-content .stock-page-manual .manual-basket-footer .btn { flex:none; min-height:44px; margin:0; padding:11px 16px; border-radius:8px; font-size:13px; font-weight:600; }
 #main-content .stock-page-manual .manual-item-source { display:block; margin-top:4px; color:var(--muted); font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
+#main-content .stock-page-manual .manual-item-depot { display:inline-flex; max-width:100%; margin:0 0 0 5px; padding:2px 5px; color:var(--muted); background:var(--shade); border-radius:4px; font-size:10px; line-height:1.4; overflow-wrap:anywhere; vertical-align:middle; }
 #main-content .stock-page-manual .manual-item-quantity strong,#main-content .stock-page-manual .manual-item-total strong { display:block; font-size:12px; line-height:1.4; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
 #main-content .stock-page-manual .manual-item-quantity small,#main-content .stock-page-manual .manual-item-total small,#main-content .stock-page-manual .manual-item-status>small { display:block; margin-top:3px; color:var(--muted); font-size:10px; line-height:1.4; }
 #main-content .stock-page-manual .manual-item-status .badge { padding:3px 6px; font-size:10px; line-height:1.4; white-space:nowrap; }
@@ -398,6 +401,8 @@
   #main-content .stock-page-manual .manual-items-error>.btn { min-height:44px; }
 }
 @media(max-width:767px) {
+  #main-content .stock-page-delivery .van-times .van-depot-field { align-items:stretch; }
+  #main-content .stock-page-delivery .van-times .van-depot-field input { max-width:none; }
   #main-content.view-manual { padding:24px 16px 112px; }
   #main-content .stock-page-manual>.app-page-heading { margin-bottom:20px; }
   #main-content .stock-page-manual>.app-page-heading h1 { font-size:24px; }

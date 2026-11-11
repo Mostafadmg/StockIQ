@@ -643,5 +643,15 @@
     "submit": "POST /api/orders/cascade accepts a nonempty list of unique {productId,supplier} allocations. Every ID must identify a current basket line. Only allocated lines are submitted; other basket lines remain unchanged. Validation completes before any order or basket mutation.",
     "selection": "With no explicitly selected lines the interface includes all ready lines. A nonempty selection includes only those lines.",
     "production": false
+  },
+  "deliveryStatus": {
+    "source": "Existing order quote, comparison and saved fulfilment delivery metadata.",
+    "optionalDepot": "Delivery van depot is an optional trimmed string of at most 80 characters. Dated delivery estimates expose delivery.depot when configured. No depot is invented for unavailable packs or missing schedules.",
+    "rules": [
+      "Working-day estimates include supplier cutoffs, weekends and England/Wales bank holidays.",
+      "Next working day uses the effective workingDays count, not the configured van offset alone.",
+      "Depot metadata is retained on historical order snapshots when delivery settings change.",
+      "Delivery badges describe schedule estimates, not supplier delivery commitments."
+    ]
   }
 }
