@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {handleApi} from '../server/api.mjs';
+import {handleApi,seedWorkspace} from '../server/api.mjs';
 const referenceRow={drug_name:'Metformin 850mg tablets',pack_size:'56',basic_price:170,category:'M',brand:null,tariff_month:'2026-11',source:'NHSBSA Drug Tariff Part VIIIA'};
 function client(options={}){
   const id=`catalogue-test-${crypto.randomUUID()}`,calls=[];
@@ -79,4 +79,29 @@ test('unavailable reference lookup reports an error instead of substituting the 
   const unconfigured=await c.request('GET','/api/dmd/search?q=metformin',undefined,{});assert.equal(unconfigured.status,503);assert.equal(unconfigured.code,'CATALOGUE_NOT_CONFIGURED');
   const failed=await c.request('GET','/api/dmd/search?q=network-failure',undefined,{...c.env,DMD_FETCH:async()=>{throw new Error('Network unreachable');}});assert.equal(failed.status,503);assert.equal(failed.code,'CATALOGUE_UNAVAILABLE');
   assert.equal((await c.request('GET','/api/products')).data.length,24);
+});
+
+
+test('stateless dispatch carries workspace state through add, submit and receive with no prior session',async()=>{
+  const c=client();
+  const first=await c.request('POST','/api/dispatch',{id:`dispatch-first-${crypto.randomUUID()}`,workspace:seedWorkspace(),method:'POST',path:'/api/basket',data:{productId:'p001',quantity:3}});
+  assert.equal(first.status,201);assert.equal(first.workspace.basket[0].quantity,3);
+  const second=await c.request('POST','/api/dispatch',{id:`dispatch-second-${crypto.randomUUID()}`,workspace:first.workspace,method:'POST',path:'/api/orders',data:{supplier:'AAH'}});
+  assert.equal(second.status,201);assert.equal(second.data.total,2.22);assert.equal(second.workspace.basket.length,0);
+  const third=await c.request('POST','/api/dispatch',{id:`dispatch-third-${crypto.randomUUID()}`,workspace:second.workspace,method:'POST',path:`/api/orders/${second.data.id}/receive`,data:{}});
+  assert.equal(third.status,200);assert.equal(third.data.status,'Received');assert.equal(third.workspace.products[0].stock,seedWorkspace().products[0].stock+3);
+  const history=await c.request('POST','/api/dispatch',{id:`dispatch-history-${crypto.randomUUID()}`,workspace:third.workspace,method:'GET',path:'/api/orders?status=Received'});
+  assert.equal(history.status,200);assert.ok(history.data.some(order=>order.id===second.data.id));
+  const health=await c.request('POST','/api/dispatch',{id:`dispatch-health-${crypto.randomUUID()}`,workspace:third.workspace,method:'GET',path:'/api/health'});assert.equal(health.status,200);assert.deepEqual(health.workspace.products,third.workspace.products);assert.equal(health.workspace.orders[0].id,third.workspace.orders[0].id);assert.equal(health.workspace.orders[0].status,'Received');
+  const missing=await c.request('POST','/api/dispatch',{id:`dispatch-missing-${crypto.randomUUID()}`,workspace:third.workspace,method:'GET',path:'/api/no-such-endpoint'});assert.equal(missing.status,404);assert.deepEqual(missing.workspace.products,third.workspace.products);assert.equal(missing.workspace.orders[0].id,third.workspace.orders[0].id);
+  assert.equal(c.calls.length,0);
+});
+test('stateless dispatch validates snapshots, method, data and same-origin paths before executing',async()=>{
+  const c=client(),valid={id:`dispatch-invalid-${crypto.randomUUID()}`,workspace:seedWorkspace(),method:'GET',path:'/api/basket'};
+  for(const extra of [{workspace:undefined},{workspace:{}},{id:'bad id'},{method:'OPTIONS'},{method:'HEAD'},{path:'https://other.test/api/basket'},{path:'//other.test/api/basket'},{path:'/api/../outside'},{path:'/api/dispatch'},{path:'/api/dispatch/'},{path:'/api/workspaces'},{path:'/api/workspaces/'},{path:'/api/\\other.test'},{data:[]},{data:'wrong'}]){
+    const rejected=await c.request('POST','/api/dispatch',{...valid,...extra});assert.equal(rejected.status,400,JSON.stringify(extra));
+  }
+  assert.equal((await c.request('POST','/api/dispatch',{...valid,path:'/api/basket?q='+ 'x'.repeat(2050)})).status,400);
+  const tooLarge=await c.request('POST','/api/dispatch',{...valid,data:{notes:'x'.repeat(270000)}});assert.equal(tooLarge.status,413);
+  assert.equal(c.calls.length,0);
 });

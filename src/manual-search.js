@@ -1,7 +1,9 @@
 /** Accessible Mellons medicine and pack picker. All requests stay on the draft origin. */
 let pickerCount=0;
+// Remember only an explicit source choice during this page session; the initial choice is live.
+let rememberedSource='live';
 const MEDICINE_TYPES=new Set(['AMP','VMP','TARIFF_MEDICINE']);
-const PACK_TYPES=new Set(['AMPP','VMPP','TARIFF','TARIFF_PACK']);
+const PACK_TYPES=new Set(['AMPP','VMPP','TARIFF','TARIFF_PACK','SAMPLE']);
 const KNOWN_TYPES=new Set([...MEDICINE_TYPES,...PACK_TYPES]);
 
 /** Keep display records small and require an explicit catalogue identifier and type. */
@@ -30,9 +32,11 @@ export function mountManualSearch({host,request,onAdd,onError=()=>{}}={}) {
   const node=(tag,className,text)=>{const el=doc.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;};
   const root=node('section','manual-dmd panel');
   const top=node('div','dmd-heading');
-  const heading=node('div','');heading.append(node('h2','','Mellons medicine catalogue'),node('p','','Find a medicine, choose its pack, then add it to your test basket.'));
-  top.append(heading,node('span','badge purple','NHS Drug Tariff reference data'));
+  const heading=node('div',''),headingTitle=node('h2','','Mellons medicine catalogue'),headingDescription=node('p','','Find a medicine, choose its pack, then add it to your test basket.');heading.append(headingTitle,headingDescription);
+  const provenanceBadge=node('span','badge purple','NHS Drug Tariff reference data');top.append(heading,provenanceBadge);
   const content=node('div','dmd-content');
+  const sourceField=node('label','dmd-source-field');sourceField.htmlFor=`${base}-source`;sourceField.append(node('span','','Lookup source'));
+  const sourceSelect=node('select','dmd-source-select');sourceSelect.id=`${base}-source`;sourceSelect.name='catalogue-source';for(const [value,text] of [['live','Mellons live catalogue'],['sample','Sample products']]){const option=node('option','',text);option.value=value;sourceSelect.append(option);}sourceSelect.value=rememberedSource;sourceField.append(sourceSelect);
   const searchArea=node('div','dmd-search-area');
   const label=node('label','dmd-search-label','Medicine name');label.htmlFor=`${base}-query`;
   const inputWrap=node('div','dmd-input-wrap');inputWrap.append(node('span','dmd-search-icon','⌕'));
@@ -43,10 +47,10 @@ export function mountManualSearch({host,request,onAdd,onError=()=>{}}={}) {
   searchArea.append(label,inputWrap,popover,status);
   const selection=node('div','dmd-selection');selection.hidden=true;
   const note=node('p','dmd-sandbox-note','Medicine and pack matches come from the Mellons catalogue. Tariff reference prices are separate from simulated supplier prices, orders and shelf stock.');
-  content.append(searchArea,selection,note);root.append(top,content);host.replaceChildren(root);
+  content.append(sourceField,searchArea,selection,note);root.append(top,content);host.replaceChildren(root);
   let alive=true,timer,searchSequence=0,packSequence=0,query='',matches=[],activeIndex=-1,selected=null,packs=[],selectedPack=null,isSearching=false,isLoadingPacks=false,isAdding=false;
   const errorMessage=(result,fallback)=>typeof result?.error==='string'?result.error:typeof result?.error?.message==='string'?result.error.message:fallback;
-  const packReference=pack=>pack.type.startsWith('TARIFF')?`NHS Drug Tariff pack${pack.referencePrice!==null?` · Tariff reference: ${new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(pack.referencePrice)}`:''}`:`${pack.type} · ${pack.id}`;
+  const packReference=pack=>pack.type==='SAMPLE'?'Sample product · Simulated stock and supplier price':pack.type.startsWith('TARIFF')?`NHS Drug Tariff pack${pack.referencePrice!==null?` · Tariff reference: ${new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(pack.referencePrice)}`:''}`:`${pack.type} · ${pack.id}`;
   const setStatus=(text,error=false)=>{if(!alive)return;status.textContent=text;status.classList.toggle('is-error',error);};
   const closeMatches=()=>{popover.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');activeIndex=-1;};
   const updateActive=()=>{[...list.querySelectorAll('[role=option]')].forEach((option,index)=>{option.classList.toggle('is-active',index===activeIndex);option.setAttribute('aria-selected',String(index===activeIndex));});if(activeIndex>=0){input.setAttribute('aria-activedescendant',`${base}-option-${activeIndex}`);list.querySelector(`#${base}-option-${activeIndex}`)?.scrollIntoView?.({block:'nearest'});}else input.removeAttribute('aria-activedescendant');};
@@ -57,7 +61,7 @@ export function mountManualSearch({host,request,onAdd,onError=()=>{}}={}) {
       const option=node('button','dmd-option');option.type='button';option.id=`${base}-option-${index}`;option.dataset.dmdIndex=String(index);option.setAttribute('role','option');option.setAttribute('aria-selected','false');option.tabIndex=-1;
       const description=node('span','dmd-option-description');description.append(node('strong','',match.name));
       const meta=[match.pack,match.manufacturer].filter(Boolean).join(' · ');if(meta)description.append(node('small','',meta));
-      option.append(description,node('span','dmd-type',match.type.startsWith('TARIFF')?'Tariff pack':match.type));list.append(option);
+      option.append(description,node('span','dmd-type',match.type==='SAMPLE'?'Sample product':match.type.startsWith('TARIFF')?'Tariff pack':match.type));list.append(option);
     });
     popover.hidden=false;input.setAttribute('aria-expanded','true');
   }
@@ -83,10 +87,10 @@ export function mountManualSearch({host,request,onAdd,onError=()=>{}}={}) {
     listen(form,'submit',async event=>{
       event.preventDefault();event.stopPropagation();if(isAdding||!selectedPack)return;
       const count=Number(quantity.value);if(!Number.isInteger(count)||count<1||count>999){setStatus('Enter a whole number of packs between 1 and 999.',true);quantity.focus();return;}
-      isAdding=true;add.disabled=true;add.textContent='Adding…';packSelect.disabled=true;quantity.disabled=true;clear.disabled=true;input.disabled=true;
+      isAdding=true;add.disabled=true;add.textContent='Adding…';packSelect.disabled=true;quantity.disabled=true;clear.disabled=true;input.disabled=true;sourceSelect.disabled=true;
       try{await onAdd({id:selectedPack.id,type:selectedPack.type,quantity:count,query:selectedPack.name.slice(0,200)});if(alive)setStatus(`${count} ${count===1?'pack':'packs'} added to the test basket.`);}
       catch(error){if(alive){setStatus(error?.message||'Could not add this pack to the test basket.',true);onError(error);}}
-      finally{isAdding=false;if(alive){add.disabled=false;add.textContent='Add to test basket';packSelect.disabled=false;quantity.disabled=false;clear.disabled=false;input.disabled=false;}}
+      finally{isAdding=false;if(alive){add.disabled=false;add.textContent='Add to test basket';packSelect.disabled=false;quantity.disabled=false;clear.disabled=false;input.disabled=false;sourceSelect.disabled=false;}}
     });
   }
   async function chooseMatch(index){
@@ -104,15 +108,27 @@ export function mountManualSearch({host,request,onAdd,onError=()=>{}}={}) {
     }catch(error){if(!alive||sequence!==packSequence)return;isLoadingPacks=false;renderSelection();setStatus(error?.message||'Could not load pack sizes.',true);onError(error);}
   }
   async function lookup(text,sequence){
-    if(!alive||sequence!==searchSequence)return;isSearching=true;setStatus('Searching the Mellons medicine catalogue…');input.setAttribute('aria-busy','true');
+    if(!alive||sequence!==searchSequence)return;const isLive=sourceSelect.value==='live';isSearching=true;setStatus(isLive?'Searching the Mellons live catalogue…':'Searching sample products…');input.setAttribute('aria-busy','true');
     try{
-      const result=await request(`/api/dmd/search?q=${encodeURIComponent(text)}`);
+      const result=await request(isLive?`/api/dmd/search?q=${encodeURIComponent(text)}`:`/api/products?q=${encodeURIComponent(text)}`);
       if(!alive||sequence!==searchSequence)return;
       if(!result?.ok)throw new Error(errorMessage(result,'Medicine lookup is unavailable. Please try again.'));
-      matches=normaliseDmdRecords(result.data?.matches);showMatches();setStatus(matches.length?`${matches.length} matching ${matches.length===1?'medicine':'medicines'}. Use the arrow keys to choose a match.`:`No catalogue matches for “${text}”. Try another medicine name or strength.`);
-    }catch(error){if(!alive||sequence!==searchSequence)return;matches=[];closeMatches();setStatus(error?.message||'Could not search the catalogue.',true);onError(error);}
+      matches=normaliseDmdRecords(isLive?result.data?.matches:Array.isArray(result.data)?result.data.map(product=>({...product,type:'SAMPLE',referencePrice:null})):[]);showMatches();setStatus(matches.length?`${matches.length} matching ${matches.length===1?'medicine':'medicines'}. Use the arrow keys to choose a match.`:`No catalogue matches for “${text}”. Try another medicine name or strength.`);
+    }catch(error){if(!alive||sequence!==searchSequence)return;matches=[];closeMatches();setStatus(`${error?.message||'Could not search the catalogue.'}${isLive?' Choose Sample products above to test the workflow while the live catalogue is unavailable.':''}`,true);onError(error);}
     finally{if(alive&&sequence===searchSequence){isSearching=false;input.removeAttribute('aria-busy');}}
   }
+  function updateSourceLabels(){
+    const isLive=sourceSelect.value==='live';
+    headingTitle.textContent=isLive?'Mellons medicine catalogue':'Sample product catalogue';
+    headingDescription.textContent=isLive?'Find a medicine, choose its pack, then add it to your test basket.':'Choose a sample product to test ordering, receiving and shelf stock.';
+    provenanceBadge.textContent=isLive?'NHS Drug Tariff reference data':'Sample data only';
+    note.textContent=isLive?'Medicine and pack matches come from the Mellons catalogue. Tariff reference prices are separate from simulated supplier prices, orders and shelf stock.':'Sample products are test fixtures. Names, prices and stock shown here are not live catalogue or supplier data.';
+    input.placeholder=isLive?'Start typing a medicine, e.g. amoxicillin 500mg':'Search sample products, e.g. amoxicillin';
+  }
+  listen(sourceSelect,'change',()=>{
+    rememberedSource=sourceSelect.value;selected=null;packs=[];selectedPack=null;query='';matches=[];searchSequence++;packSequence++;clearTimeout(timer);isSearching=false;isLoadingPacks=false;input.value='';input.removeAttribute('aria-busy');closeMatches();renderSelection();updateSourceLabels();setStatus(sourceSelect.value==='live'?'Type at least 2 characters to search the Mellons live catalogue.':'Type at least 2 characters to search sample products.');input.focus();
+  });
+  updateSourceLabels();
   listen(input,'input',()=>{
     query=input.value.trim();selected=null;packs=[];selectedPack=null;isLoadingPacks=false;packSequence++;renderSelection();clearTimeout(timer);matches=[];closeMatches();
     const sequence=++searchSequence;input.removeAttribute('aria-busy');isSearching=false;

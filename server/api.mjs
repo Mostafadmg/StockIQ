@@ -163,6 +163,25 @@ export async function handleApi(request,env={}) {
   if(!path.startsWith('/api/'))return null;
   try{
     if(path==='/api/health'&&method==='GET')return reply({status:'ok',mode:'sandbox',version:'1.0.0',supplierConnections:0});
+    // Hosted Workers may run every request in a fresh isolate. Carry one validated
+    // device-local sandbox snapshot with each logical request instead of relying
+    // on a prior invocation's in-memory session.
+    if(path==='/api/dispatch'&&method==='POST'){
+      const envelope=await body(request),id=string(envelope.id,80,'Workspace ID');
+      if(!/^[\w-]{8,80}$/.test(id))fail('Workspace ID must contain 8–80 letters, numbers, underscores or hyphens.');
+      const logicalMethod=typeof envelope.method==='string'?envelope.method.toUpperCase():'';
+      if(!['GET','POST','PATCH','DELETE'].includes(logicalMethod))fail('Dispatch method must be GET, POST, PATCH or DELETE.');
+      if(typeof envelope.path!=='string'||envelope.path.length>2048||!envelope.path.startsWith('/api/')||envelope.path.includes('\\'))fail('Dispatch path must be a same-origin /api/ path.');
+      const logicalURL=new URL(envelope.path,url.origin),logicalPath=logicalURL.pathname.replace(/\/$/,'');
+      if(logicalURL.origin!==url.origin||!logicalURL.pathname.startsWith('/api/')||['/api/dispatch','/api/workspaces'].includes(logicalPath))fail('This route cannot be called through dispatch.');
+      if(envelope.data!==undefined&&(!envelope.data||typeof envelope.data!=='object'||Array.isArray(envelope.data)))fail('Dispatch data must be a JSON object.');
+      const w=await restoreWorkspace(envelope.workspace);
+      if(!sessions.has(id)&&sessions.size>=MAX_SESSIONS)sessions.delete(sessions.keys().next().value);
+      sessions.set(id,w);
+      const inner=new Request(logicalURL,{method:logicalMethod,headers:{'content-type':'application/json','x-workspace-id':id},...(logicalMethod==='GET'?{}:{body:JSON.stringify(envelope.data??{})})});
+      const response=await handleApi(inner,env),result=await response.json();
+      return Response.json({...result,workspace:result.workspace??copy(w)},{status:response.status,headers:response.headers});
+    }
     if(path==='/api/workspaces'&&method==='POST'){
       const data=await body(request);const id=string(data.id,80,'Workspace ID');if(!/^[\w-]{8,80}$/.test(id))fail('Workspace ID must contain 8–80 letters, numbers, underscores or hyphens.');
       const w=data.workspace?await restoreWorkspace(data.workspace):sessions.has(id)?sessions.get(id):seedWorkspace();

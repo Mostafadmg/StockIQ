@@ -46,7 +46,7 @@ test('compiled client assets and server contain no production domains, account e
   const compiled=await readFile(new URL('../dist/server/index.js',import.meta.url),'utf8');
   assert.doesNotMatch(compiled,/(?:ordering|api)\.stockiq\.uk/i);assert.doesNotMatch(compiled,/@alliedpharmacies\.com/i);
   assert.doesNotMatch(compiled,/art_v2_[a-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+|sk-proj-[A-Za-z0-9_-]+/);
-  const app=await (await fetchDraft('/app.js')).text();assert.match(app,/fetch\('\/api\/workspaces'/);assert.match(app,/fetch\(path,/);assert.doesNotMatch(app,/fetch\(['"`]https?:/);
+  const app=await (await fetchDraft('/app.js')).text();assert.match(app,/fetch\('\/api\/workspaces'/);assert.match(app,/fetch\('\/api\/dispatch'/);assert.doesNotMatch(app,/fetch\(['"`]https?:/);
   const reference=await fetchDraft('/api-reference.json');assert.equal(reference.status,200);const doc=await reference.json();assert.ok(doc&&typeof doc==='object');
   const manifest=JSON.parse(await readFile(new URL('../dist/.openai/hosting.json',import.meta.url),'utf8'));
   assert.match(manifest.project_id,/^appgprj_/);assert.equal(manifest.static,undefined);

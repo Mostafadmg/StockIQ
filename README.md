@@ -50,7 +50,9 @@ The hosted draft is configured with the public client lookup connection from `Mo
 - `MELLONS_SUPABASE_URL`: the existing Mellons Supabase project origin.
 - `MELLONS_SUPABASE_PUBLISHABLE_KEY`: its existing public publishable/anon key, not a service-role key.
 
-No TRUD key or service-role access is needed: only the existing read-only search function is invoked. Search uses a debounced, keyboard-accessible combobox and a same-origin server proxy. If the upstream cannot be reached, the interface shows a clear error and retains the sample catalogue; it never silently substitutes sample matches. Catalogue results are cached briefly. Browser snapshots also preserve selected reference packs and their simulated stock after an API session restart.
+No TRUD key or service-role access is needed: only the existing read-only search function is invoked. Search uses a debounced, keyboard-accessible combobox and a same-origin server proxy. If the upstream cannot be reached, the interface shows a clear error; choose the explicitly labelled **Sample products** source to test the dropdown and stock workflow. It never silently substitutes sample matches. Catalogue results are cached briefly. Browser snapshots also preserve selected reference packs and their simulated stock after an API session restart.
+
+The browser sends its workspace snapshot with each logical request through `POST /api/dispatch`, so ordering and stock remain consistent even when the host starts a new Worker isolate for each call. The direct REST routes are also available to development clients that keep an API session. Lookup reads never overwrite newer browser stock/basket changes.
 
 The endpoint paths `/api/dmd/search` and `/api/dmd/packs` are adapter names retained for the product lookup; their returned `type: TARIFF` accurately identifies the source records.
 
