@@ -1,0 +1,382 @@
+{
+  "title": "StockIQ sandbox API",
+  "version": "1.0.0",
+  "purpose": "Self-contained draft endpoints for synthetic workflow testing. This is not the production StockIQ API contract.",
+  "base_url": "Same origin as the draft website. Use relative /api/... paths only.",
+  "network_rules": [
+    "All browser API calls must stay on the draft origin.",
+    "No arbitrary API base URL, production API proxy, supplier API, PMR feed or credential forwarding is supported.",
+    "Do not send production credentials, patient data or branch identifiers."
+  ],
+  "workspace": {
+    "header": "x-workspace-id",
+    "example": "demo-workspace-123",
+    "initialization": "POST /api/workspaces with a client-generated id; include that id in the header of later requests.",
+    "exceptions": [
+      "GET /api/health",
+      "POST /api/workspaces"
+    ],
+    "storage": "Process-local, ephemeral memory; clients may restore a validated snapshot using POST /api/workspaces. Workspaces may be lost on worker restart, isolate change or eviction.",
+    "limits": {
+      "active_workspaces": 160,
+      "orders_per_workspace": 200,
+      "drafts_per_workspace": 200,
+      "claims_per_workspace": 200,
+      "feedback_records_per_workspace": 200,
+      "body_characters": 262144
+    },
+    "security": "The workspace id is a demo isolation key, not production authentication or authorization. This server must not be connected to sensitive or live data."
+  },
+  "response": {
+    "success": {
+      "data": "Endpoint-specific payload",
+      "workspace": "Current workspace snapshot on workspace-scoped responses; also returned on creation and reset.",
+      "production": false
+    },
+    "error": {
+      "error": "Human-readable message",
+      "production": false,
+      "code": "Optional machine-readable code. SESSION_EXPIRED means create or restore the workspace before retrying."
+    },
+    "headers": {
+      "cache-control": "no-store",
+      "x-stockiq-sandbox": "true",
+      "x-production": "false"
+    }
+  },
+  "validation": {
+    "quantities": "Whole numbers from 1 through 999 unless an endpoint states a different range.",
+    "known_test_suppliers": [
+      "Bestway",
+      "Alliance Healthcare",
+      "AAH",
+      "Lexon",
+      "Sigma"
+    ],
+    "common_errors": {
+      "400": "Malformed JSON, invalid field, empty basket or invalid quantity.",
+      "404": "Unknown endpoint or record.",
+      "409": "Workspace not initialized, already received order or record capacity reached.",
+      "413": "JSON body exceeds sandbox limit.",
+      "500": "Unexpected sandbox error."
+    }
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "description": "Reports sandbox status and zero supplier connections. No workspace header required.",
+      "success_status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspaces",
+      "description": "Creates or restores an isolated synthetic workspace. No workspace header required.",
+      "success_status": 201,
+      "request_body": {
+        "id": "demo-workspace-123",
+        "workspace": "Optional version-1 snapshot returned by an earlier response; omit to seed test data."
+      },
+      "notes": [
+        "id must be 8\u201380 letters, digits, underscores or hyphens.",
+        "Existing id reuses its in-memory workspace when no snapshot is supplied.",
+        "A snapshot is validated and normalized against the synthetic catalog before restoration."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/reset",
+      "description": "Replaces this workspace with freshly seeded test data.",
+      "success_status": 200,
+      "request_body": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/products",
+      "description": "Lists the synthetic product catalog.",
+      "success_status": 200,
+      "query_parameters": {
+        "q": "Optional case-insensitive name or PIP substring.",
+        "category": "Optional Prescription or OTC filter, case-insensitive.",
+        "fast": "Set to the string true to return fast lines only."
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/pending",
+      "description": "Returns low-stock or owed sample products with suggested quantities.",
+      "success_status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/basket",
+      "description": "Returns basket items, total and total pack quantity.",
+      "success_status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/basket",
+      "description": "Adds a product and increments an existing basket line.",
+      "success_status": 201,
+      "request_body": {
+        "productId": "p001",
+        "quantity": 2
+      },
+      "notes": [
+        "Resulting line quantity must remain in the range 1\u2013999."
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/basket/{productId}",
+      "description": "Sets the quantity of an existing basket line.",
+      "success_status": 200,
+      "request_body": {
+        "quantity": 3
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/basket/{productId}",
+      "description": "Removes an existing basket line.",
+      "success_status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders",
+      "description": "Lists test orders.",
+      "success_status": 200,
+      "query_parameters": {
+        "status": "Optional exact status: Awaiting, Part received or Received."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders",
+      "description": "Creates a test order from the current basket and empties the basket.",
+      "success_status": 201,
+      "request_body": {
+        "supplier": "Bestway",
+        "source": "manual",
+        "notes": "Optional test order notes"
+      },
+      "notes": [
+        "The basket must contain at least one product.",
+        "supplier is optional and defaults to preferredSupplier.",
+        "source is auto or manual; unknown values use manual.",
+        "No external order or supplier connection is created."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/{orderId}/receive",
+      "description": "Receives test packs into synthetic stock and settles synthetic owed quantities.",
+      "success_status": 200,
+      "request_body": {
+        "items": [
+          {
+            "productId": "p001",
+            "quantity": 2
+          }
+        ]
+      },
+      "notes": [
+        "Omit items to receive all outstanding quantities.",
+        "An explicit items array must contain at least one unique ordered product.",
+        "Quantities are additional packs received and cannot exceed the outstanding amount.",
+        "Returns 409 for a fully received order. Receipt validation happens before any line is changed."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/{orderId}/claim",
+      "description": "Records an isolated test claim.",
+      "success_status": 201,
+      "request_body": {
+        "reason": "Short delivery in test scenario",
+        "quantity": 1
+      },
+      "notes": [
+        "Reason is required, up to 500 characters.",
+        "quantity defaults to 1 and cannot exceed the total ordered pack quantity.",
+        "No supplier receives this claim."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/drafts",
+      "description": "Lists saved sandbox baskets.",
+      "success_status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/drafts",
+      "description": "Saves a copy of the current basket as a draft without clearing the basket.",
+      "success_status": 201,
+      "request_body": {
+        "name": "Weekly essentials"
+      },
+      "notes": [
+        "Name is required, up to 80 characters; basket must be nonempty."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/drafts/{draftId}/restore",
+      "description": "Replaces the current basket with a saved draft using current synthetic catalog prices.",
+      "success_status": 200,
+      "request_body": {}
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/drafts/{draftId}",
+      "description": "Deletes a saved sandbox draft.",
+      "success_status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/claims",
+      "description": "Lists sandbox claims.",
+      "success_status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/claims/{claimId}/resolve",
+      "description": "Marks a sandbox claim Resolved.",
+      "success_status": 200,
+      "request_body": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/feedback",
+      "description": "Lists sandbox stock feedback.",
+      "success_status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/feedback",
+      "description": "Records product feedback locally in the test workspace.",
+      "success_status": 201,
+      "request_body": {
+        "productId": "p001",
+        "message": "Sample stockout observation"
+      },
+      "notes": [
+        "Message is required, up to 500 characters."
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/stock/{productId}",
+      "description": "Sets the synthetic stock-on-shelf count.",
+      "success_status": 200,
+      "request_body": {
+        "quantity": 12
+      },
+      "notes": [
+        "Stock must be a whole number from 0 to 9999."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/analytics",
+      "description": "Returns sandbox spend, order counts, supplier totals, top products and an illustrative trend.",
+      "success_status": 200,
+      "notes": [
+        "Savings and trend figures are illustrative, not validated production analytics."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings",
+      "description": "Reads this sandbox workspace settings.",
+      "success_status": 200
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/settings",
+      "description": "Changes only the supplied recognized settings.",
+      "success_status": 200,
+      "request_body": {
+        "autoOrder": true,
+        "lowStockAlerts": true,
+        "smartOrdering": true,
+        "daysCover": 7,
+        "preferredSupplier": "Bestway",
+        "deliveryCutoff": "14:00",
+        "theme": "light",
+        "fontSize": "normal"
+      },
+      "notes": [
+        "Boolean settings require booleans. daysCover is a whole number from 1 to 90.",
+        "deliveryCutoff uses HH:MM; theme is light or dark; fontSize is normal or large.",
+        "Unknown settings and unsupported test suppliers are rejected.",
+        "These settings do not turn on real ordering, AI or external notifications."
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "description": "Returns synthetic low-stock and delivery notifications.",
+      "success_status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/ordering/counts",
+      "description": "Returns pending product, basket line and awaiting order counts.",
+      "success_status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "description": "Returns the fixed demo identity. Does not authenticate a production user.",
+      "success_status": 200
+    }
+  ],
+  "example_sequence": [
+    {
+      "method": "POST",
+      "path": "/api/workspaces",
+      "body": {
+        "id": "demo-workspace-123"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/products?q=paracetamol",
+      "headers": {
+        "x-workspace-id": "demo-workspace-123"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/basket",
+      "headers": {
+        "x-workspace-id": "demo-workspace-123"
+      },
+      "body": {
+        "productId": "p001",
+        "quantity": 2
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders",
+      "headers": {
+        "x-workspace-id": "demo-workspace-123"
+      },
+      "body": {
+        "source": "manual",
+        "notes": "Test order only"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/{returnedOrderId}/receive",
+      "headers": {
+        "x-workspace-id": "demo-workspace-123"
+      },
+      "body": {}
+    }
+  ]
+}

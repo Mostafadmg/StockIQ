@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {renderView} from '../src/views.js';
+import {seedWorkspace} from '../server/api.mjs';
+const all=['auto','manual','goods','history','usage','fast','delivery','stock','smart','analytics','surplus','attention','import','feedback','drafts','order-analytics','api'];
+test('every observed main and menu page renders from the actual API seed',()=>{for(const view of all){const html=renderView(view,{state:seedWorkspace()});assert.ok(html.includes('<h1>'),view);assert.ok(!/undefined|NaN|\[object Object\]/.test(html),view);}});
+test('subtabs render usable read models',()=>{for(const [view,tabs] of Object.entries({auto:['orders','fast','otc'],goods:['deliveries','claims'],history:['all','Received','Part received','Awaiting'],stock:['overview','to-count','count-history','count'],smart:['forecast','orders'],analytics:['overview','regret','waste','prices','slow','performance'],'order-analytics':['overview','scorecard','shadow']})){for(const subtab of tabs){const html=renderView(view,{state:seedWorkspace(),subtab});assert.ok(html.includes('<h1>'));assert.ok(!/undefined|NaN|\[object Object\]/.test(html),`${view}/${subtab}`);}}});
+test('search and date filters select correct catalogue and history records',()=>{const state=seedWorkspace();const html=renderView('manual',{state,search:'amoxicillin'});assert.ok(html.includes('Amoxicillin'));const table=html.slice(html.indexOf('<tbody>'),html.indexOf('</tbody>'));assert.ok(!table.includes('Paracetamol'));const history=renderView('history',{state,historyFrom:'2099-01-01'});assert.ok(history.includes('No orders match'));});
+test('record content is escaped in views',()=>{const state=seedWorkspace();state.products[0].name='<script>alert(1)</script>';const html=renderView('auto',{state});assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));});
+test('stock receipt and claim routes are actionable in Goods In',()=>{const html=renderView('goods',{state:seedWorkspace()});assert.ok(html.includes('data-action="receive"'));assert.ok(html.includes('data-action="claim"'));});

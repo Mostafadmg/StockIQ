@@ -1,0 +1,8 @@
+node_modules/
+dist/
+outputs/
+.sites-runtime/
+.env*
+.dev.vars*
+*.log
+.DS_Store

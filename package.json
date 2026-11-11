@@ -1,0 +1,14 @@
+{
+  "name": "stockiq-sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated StockIQ workflow draft with synthetic data and test APIs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "start": "node server/local.mjs",
+    "check": "node --check src/app.js && node --check src/views.js && node --check server/api.mjs"
+  },
+  "engines": {"node": ">=22"}
+}
